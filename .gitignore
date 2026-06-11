@@ -1,0 +1,17 @@
+# Environnement virtuel
+venv/
+
+# Variables d'environnement (mots de passe !)
+.env
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# IDE
+.vscode/settings.json

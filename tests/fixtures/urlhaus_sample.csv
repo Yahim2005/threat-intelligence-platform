@@ -1,0 +1,10 @@
+################################################################
+# abuse.ch URLhaus Database Dump - FIXTURE DE TEST            #
+# Last updated: 2024-01-01 00:00:00 (UTC)                     #
+################################################################
+#
+id,dateadded,url,url_status,last_online,threat,tags,urlhaus_link,reporter
+#
+"1","2024-01-01 10:00:00","http://malicious1.example.com/payload.exe","online","","malware_download","exe,AgentTesla","https://urlhaus.abuse.ch/url/1/","researcher1"
+"2","2024-01-02 11:00:00","http://malicious2.example.com/drop.zip","offline","2024-01-03 00:00:00","malware_download","zip,Emotet","https://urlhaus.abuse.ch/url/2/","researcher2"
+"3","2024-01-03 12:00:00","http://phishing3.example.com/login","online","","phishing","","https://urlhaus.abuse.ch/url/3/","researcher1"
