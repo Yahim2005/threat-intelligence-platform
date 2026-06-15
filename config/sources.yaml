@@ -1,9 +1,20 @@
-# Registre des sources de threat intelligence du TIP.
-# interval_minutes : fréquence de collecte souhaitée (utilisée par le scheduler au J9)
-# enabled          : mettre à false pour désactiver sans supprimer la config
-
 sources:
   - name: "abuse.ch - URLhaus"
     class: "collectors.urlhaus.URLhausCollector"
     interval_minutes: 60
+    enabled: true
+
+  - name: "abuse.ch - Feodo"
+    class: "collectors.feodo.FeodoCollector"
+    interval_minutes: 60
+    enabled: true
+
+  - name: "abuse.ch - ThreatFox"
+    class: "collectors.threatfox.ThreatFoxCollector"
+    interval_minutes: 60
+    enabled: true
+
+  - name: "Spamhaus - DROP"
+    class: "collectors.spamhaus.SpamhausDropCollector"
+    interval_minutes: 1440
     enabled: true

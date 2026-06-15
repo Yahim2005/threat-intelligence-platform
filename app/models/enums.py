@@ -9,6 +9,7 @@ class IOCType(str, enum.Enum):
     sha256 = "sha256"
     sha1 = "sha1"
     email = "email"
+    cidr   = "cidr" 
 
 
 class TLPLevel(str, enum.Enum):
@@ -43,3 +44,4 @@ class RelationshipType(str, enum.Enum):
     targets = "targets"
     attributed_to = "attributed-to"
     mitigates = "mitigates"
+    

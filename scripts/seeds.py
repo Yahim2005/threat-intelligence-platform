@@ -2,14 +2,32 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Cet import unique charge TOUS les modèles d'un coup via __init__.py
 from app.models import Source
 from app.database import SessionLocal
 from app.models.enums import SourceType, TLPLevel
+
 SOURCES = [
     {
         "name": "abuse.ch - URLhaus",
         "url": "https://urlhaus-api.abuse.ch/v1/",
+        "source_type": SourceType.feed,
+        "tlp": TLPLevel.CLEAR,
+    },
+    {
+        "name": "abuse.ch - Feodo",
+        "url": "https://feodotracker.abuse.ch/downloads/ipblocklist.json",
+        "source_type": SourceType.feed,
+        "tlp": TLPLevel.CLEAR,
+    },
+    {
+        "name": "abuse.ch - ThreatFox",
+        "url": "https://threatfox-api.abuse.ch/api/v1/",
+        "source_type": SourceType.api,
+        "tlp": TLPLevel.CLEAR,
+    },
+    {
+        "name": "Spamhaus - DROP",
+        "url": "https://www.spamhaus.org/drop/drop.txt",
         "source_type": SourceType.feed,
         "tlp": TLPLevel.CLEAR,
     },
