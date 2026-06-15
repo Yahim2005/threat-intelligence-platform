@@ -18,3 +18,13 @@ sources:
     class: "collectors.spamhaus.SpamhausDropCollector"
     interval_minutes: 1440
     enabled: true
+
+  - name: "AlienVault OTX"
+    class: "collectors.otx.OTXCollector"
+    interval_minutes: 60
+    enabled: true
+
+  - name: "OpenPhish"
+    class: "collectors.openphish.OpenPhishCollector"
+    interval_minutes: 720
+    enabled: true

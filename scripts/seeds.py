@@ -43,6 +43,12 @@ SOURCES = [
         "source_type": SourceType.api,
         "tlp": TLPLevel.GREEN,
     },
+    {
+        "name": "OpenPhish",
+        "url": "https://openphish.com/feed.txt",
+        "source_type": SourceType.feed,
+        "tlp": TLPLevel.CLEAR,
+    },
 ]
 
 
