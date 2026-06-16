@@ -57,9 +57,10 @@ class SpamhausDropCollector(BaseCollector):
                 "value":   cidr,
                 "type":    IOCType.cidr,
                 "seen_at": datetime.utcnow(),
-                "tags": {
+                "metadata": {
                     "source": "spamhaus_drop",
                 },
+                "tag_names": [],
                 "context": {
                     "sbl_reference": sbl_ref,
                 },

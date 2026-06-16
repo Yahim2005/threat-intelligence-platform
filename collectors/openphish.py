@@ -48,10 +48,11 @@ class OpenPhishCollector(BaseCollector):
                 "value":   url,
                 "type":    IOCType.url,
                 "seen_at": datetime.utcnow(),
-                "tags": {
+                "metadata": {
                     "threat_type": "phishing",
                     "source":      "openphish",
                 },
+                "tag_names": [],
                 "context": {},
             })
 

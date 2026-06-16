@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from app.models.sighting import Sighting
     from app.models.enrichment import Enrichment
     from app.models.attack_mapping import AttackMapping
-
+    from app.models.tag import Tag
 class Indicator(Base):
     __tablename__ = "indicators"
     __table_args__ = (
@@ -37,7 +37,10 @@ class Indicator(Base):
     )
     first_seen: Mapped[datetime | None] = mapped_column(DateTime)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime)
-    tags: Mapped[dict | None] = mapped_column(JSONB)
+    raw_metadata: Mapped[dict | None] = mapped_column(JSONB)
+    tags: Mapped[list["Tag"]] = relationship(
+    "Tag", secondary="indicator_tags", back_populates="indicators"
+)
     raw_data: Mapped[dict | None] = mapped_column(JSONB)
     source_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("sources.id", ondelete="SET NULL")

@@ -93,7 +93,7 @@ class ThreatFoxCollector(BaseCollector):
                 "value":   value,
                 "type":    ioc_type,
                 "seen_at": seen_at,
-                "tags": {
+                "metadata": {
                     "malware":     entry.get("malware_printable", "").strip(),
                     "threat_type": entry.get("threat_type", "").strip(),
                     "source":      "threatfox",

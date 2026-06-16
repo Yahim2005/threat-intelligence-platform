@@ -16,8 +16,7 @@ Format d'un enregistrement standard :
 """
 import logging
 from datetime import datetime
-
-from app.models import Indicator, Sighting, Source
+from app.models import Indicator, Sighting, Source, Tag
 from app.models.enums import IOCType, IndicatorStatus, TLPLevel
 
 logger = logging.getLogger(__name__)
@@ -47,6 +46,22 @@ def get_or_create_indicator(
     session.add(indicator)
     session.flush()  # obtient l'ID sans committer, pour pouvoir créer le Sighting
     return indicator, True
+
+def get_or_create_tag(session, name: str) -> Tag:
+    """Cherche un tag par son nom, le crée s'il n'existe pas."""
+    tag = session.query(Tag).filter_by(name=name).first()
+    if tag is None:
+        tag = Tag(name=name)
+        session.add(tag)
+        session.flush()
+    return tag
+
+
+def attach_tag(session, indicator: Indicator, tag_name: str) -> None:
+    """Attache un tag à un indicateur, sans créer de doublon."""
+    tag = get_or_create_tag(session, tag_name)
+    if tag not in indicator.tags:
+        indicator.tags.append(tag)
 
 
 def store_records(records: list[dict], source_name: str, session) -> dict:
@@ -78,9 +93,16 @@ def store_records(records: list[dict], source_name: str, session) -> dict:
                 indicator.last_seen = seen_at
 
             # Tags (fusion avec l'existant, pas écrasement)
-            if record.get("tags"):
-                indicator.tags = {**(indicator.tags or {}), **record["tags"]}
+            # Métadonnées brutes du collecteur (fusion avec l'existant)
+            if record.get("metadata"):
+                indicator.raw_metadata = {
+                    **(indicator.raw_metadata or {}),
+                    **record["metadata"],
+                }
 
+            # Tags normalisés (relation many-to-many)
+            for tag_name in record.get("tag_names") or []:
+                attach_tag(session, indicator, tag_name)
             # Sighting
             session.add(Sighting(
                 indicator_id=indicator.id,

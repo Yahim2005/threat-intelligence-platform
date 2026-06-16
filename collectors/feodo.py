@@ -4,10 +4,10 @@ Source : https://feodotracker.abuse.ch/downloads/ipblocklist.json
 IOCs   : adresses IP de serveurs Command & Control (botnets bancaires)
 Auth   : aucune (feed public JSON)
 """
+import json
 import logging
 from datetime import datetime
-
-import httpx
+import httpx 
 
 from app.models.enums import IOCType
 from collectors.base import BaseCollector
@@ -53,10 +53,11 @@ class FeodoCollector(BaseCollector):
                 "value":   ip,
                 "type":    IOCType.ip,
                 "seen_at": seen_at,
-                "tags": {
+                "metadata": {
                     "malware": malware,
                     "source":  "feodo",
                 } if malware else {"source": "feodo"},
+                "tag_names": [malware] if malware else [],
                 "context": {
                     "port":    entry.get("port"),
                     "status":  entry.get("status"),

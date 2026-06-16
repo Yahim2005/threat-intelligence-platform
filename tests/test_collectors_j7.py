@@ -65,7 +65,7 @@ def test_otx_parse_ip():
     records = OTXCollector().parse(OTX_FIXTURE)
     ip_record = next(r for r in records if r["type"] == IOCType.ip)
     assert ip_record["value"] == "185.220.101.47"
-    assert ip_record["tags"]["pulse_name"] == "Dridex C2 Campaign June 2026"
+    assert ip_record["metadata"]["pulse_name"] == "Dridex C2 Campaign June 2026"
     assert ip_record["context"]["pulse_id"] == "pulse_abc123"
 
 
@@ -73,7 +73,7 @@ def test_otx_parse_pulse_name_preserved():
     """Le nom du pulse est conservé sur chaque indicateur — clé de corrélation future."""
     records = OTXCollector().parse(OTX_FIXTURE)
     phishing = next(r for r in records if r["type"] == IOCType.url)
-    assert phishing["tags"]["pulse_name"] == "Phishing Kit 2026"
+    assert phishing["metadata"]["pulse_name"] == "Phishing Kit 2026"
 
 
 def test_otx_parse_skips_unsupported_type():
@@ -106,5 +106,5 @@ def test_openphish_parse_fields():
     record = OpenPhishCollector().parse(OPENPHISH_FIXTURE)[0]
     assert record["type"] == IOCType.url
     assert record["value"] == "https://evil-phish.com/secure/login"
-    assert record["tags"]["threat_type"] == "phishing"
+    assert record["metadata"]["threat_type"] == "phishing"
     assert isinstance(record["seen_at"], datetime)

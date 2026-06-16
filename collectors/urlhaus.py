@@ -75,8 +75,9 @@ class URLhausCollector(BaseCollector):
                 "value":   value,
                 "type":    IOCType.url,
                 "seen_at": seen_at,
-                "tags":    {"threat": threat, "source": "urlhaus"} if threat
-                           else {"source": "urlhaus"},
+                "metadata": {"threat": threat, "source": "urlhaus"} if threat
+                            else {"source": "urlhaus"},
+                "tag_names": [f"threat:{threat}"] if threat else [],
                 "context": {
                     "urlhaus_id": row.get("id"),
                     "url_status": row.get("url_status"),

@@ -1,12 +1,12 @@
-"""BaseCollector : squelette réutilisable pour tous les collecteurs TIP.
-
-Chaque source hérite de cette classe et n'implémente que :
-  - name        : str identifiant la source (doit correspondre à Source.name en base)
-  - fetch()     : télécharge / récupère les données brutes
-  - parse(raw)  : traduit les données brutes en liste de records standards
-
-Le reste (boucle, persistance, logging, gestion du temps) est fourni par run().
 """
+            Chaque record est un dict avec ces clés :
+            value      (str)       : valeur de l'IOC — obligatoire
+            type       (IOCType)   : type de l'IOC  — obligatoire
+            seen_at    (datetime)  : date d'observation — optionnel
+            metadata   (dict)      : métadonnées brutes de la source — optionnel
+            tag_names  (list[str]) : tags normalisés (ex. "kev", "tor-exit") — optionnel
+            context    (dict)      : détails du sighting — optionnel
+        """
 import logging
 import time
 from abc import ABC, abstractmethod
@@ -42,7 +42,8 @@ class BaseCollector(ABC):
             value   (str)      : valeur de l'IOC — obligatoire
             type    (IOCType)  : type de l'IOC  — obligatoire
             seen_at (datetime) : date d'observation — optionnel
-            tags    (dict)     : métadonnées de l'indicateur — optionnel
+            metadata (dict)    : métadonnées brutes de la source — optionnel
+            tag_names (list[str]) : tags normalisés (ex. "kev", "tor-exit") — optionnel
             context (dict)     : détails du sighting — optionnel
         """
 

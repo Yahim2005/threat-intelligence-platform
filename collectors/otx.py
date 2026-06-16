@@ -181,7 +181,7 @@ class OTXCollector(BaseCollector):
                     "value":   value,
                     "type":    OTX_TYPE_MAP[otx_type],
                     "seen_at": seen_at,
-                    "tags": {
+                    "metadata": {
                         "pulse_name": pulse_name,
                         "source":     "otx",
                     },

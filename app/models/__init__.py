@@ -6,3 +6,4 @@ from app.models.enrichment import Enrichment
 from app.models.attack_mapping import AttackMapping
 from app.models.threat import Threat
 from app.models.relationship import TIPRelationship
+from app.models.tag import Tag, indicator_tags
