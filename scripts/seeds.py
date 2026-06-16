@@ -49,6 +49,18 @@ SOURCES = [
         "source_type": SourceType.feed,
         "tlp": TLPLevel.CLEAR,
     },
+    {
+        "name": "Tor Project - Exit List",
+        "url": "https://check.torproject.org/torbulkexitlist",
+        "source_type": SourceType.feed,
+        "tlp": TLPLevel.CLEAR,
+    },
+    {
+        "name": "NVD",
+        "url": "https://services.nvd.nist.gov/rest/json/cves/2.0",
+        "source_type": SourceType.api,
+        "tlp": TLPLevel.CLEAR,
+    },
 ]
 
 

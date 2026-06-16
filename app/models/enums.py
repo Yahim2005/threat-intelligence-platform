@@ -10,6 +10,7 @@ class IOCType(str, enum.Enum):
     sha1 = "sha1"
     email = "email"
     cidr   = "cidr" 
+    cve   = "cve"
 
 
 class TLPLevel(str, enum.Enum):

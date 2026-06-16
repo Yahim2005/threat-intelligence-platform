@@ -28,3 +28,16 @@ sources:
     class: "collectors.openphish.OpenPhishCollector"
     interval_minutes: 720
     enabled: true
+
+  - name: "CISA KEV"
+    class: "collectors.cisa_kev.CisaKevCollector"
+    interval_minutes: 1440
+    enabled: true
+  - name: "Tor Project - Exit List"
+    class: "collectors.tor_exit.TorExitCollector"
+    interval_minutes: 360
+    enabled: true
+  - name: "NVD"
+    class: "collectors.nvd.NvdCollector"
+    interval_minutes: 1440
+    enabled: true
