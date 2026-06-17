@@ -46,3 +46,8 @@ class RelationshipType(str, enum.Enum):
     attributed_to = "attributed-to"
     mitigates = "mitigates"
     
+class RunStatus(str, enum.Enum):
+    running = "running"
+    success = "success"
+    partial = "partial"   # certains records ont échoué, mais le run a terminé
+    failed = "failed"     # le run entier a échoué (fetch ou parse a planté)

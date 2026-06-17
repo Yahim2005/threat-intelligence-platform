@@ -16,8 +16,7 @@ class TorExitCollector(BaseCollector):
     name = "Tor Project - Exit List"
 
     def fetch(self):
-        response = httpx.get(TOR_EXIT_URL, timeout=30)
-        response.raise_for_status()
+        response = self.http_get_with_retry(TOR_EXIT_URL)
         return response.text
 
     def parse(self, raw: str) -> list[dict]:

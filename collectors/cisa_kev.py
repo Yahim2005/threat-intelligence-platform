@@ -15,8 +15,7 @@ class CisaKevCollector(BaseCollector):
     name = "CISA KEV"
 
     def fetch(self):
-        response = httpx.get(KEV_URL, timeout=30)
-        response.raise_for_status()
+        response = self.http_get_with_retry(KEV_URL)
         return response.json()
 
     def parse(self, raw: dict) -> list[dict]:

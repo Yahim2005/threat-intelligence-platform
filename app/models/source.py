@@ -12,6 +12,7 @@ from app.models.enums import SourceType, TLPLevel
 
 if TYPE_CHECKING:
     from app.models.indicator import Indicator
+    from app.models.collection_run import CollectionRun
 
 class Source(Base):
     __tablename__ = "sources"
@@ -28,8 +29,10 @@ class Source(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    from sqlalchemy.orm import relationship
     indicators: Mapped[list["Indicator"]] = relationship(
         "Indicator", back_populates="source"
+    )
+    collection_runs: Mapped[list["CollectionRun"]] = relationship(
+        "CollectionRun", back_populates="source", cascade="all, delete-orphan"
     )
     

@@ -8,6 +8,7 @@ On limite la collecte aux CVE modifiées dans les 30 derniers jours.
 import os
 import time
 from datetime import datetime, timedelta
+from app.rate_limiter import RateLimiter
 
 import httpx
 
@@ -23,7 +24,8 @@ PAUSE_BETWEEN_REQUESTS = 0.7
 
 class NvdCollector(BaseCollector):
     name = "NVD"
-
+    # 50 req/30s avec clé API (NVD officiel). Marge de sécurité : on vise 45.
+    _rate_limiter = RateLimiter(max_calls=45, period_seconds=30)
     def fetch(self):
         api_key = os.getenv("NVD_API_KEY")
         headers = {"apiKey": api_key} if api_key else {}
@@ -40,8 +42,9 @@ class NvdCollector(BaseCollector):
         start_index = 0
         while True:
             params = {**params_base, "startIndex": start_index}
-            response = httpx.get(NVD_URL, params=params, headers=headers, timeout=30)
-            response.raise_for_status()
+            self._rate_limiter.wait_if_needed()
+            response = self.http_get_with_retry(NVD_URL, params=params, headers=headers)
+            
             data = response.json()
 
             page = data.get("vulnerabilities", [])

@@ -66,6 +66,8 @@ def attach_tag(session, indicator: Indicator, tag_name: str) -> None:
 
 def store_records(records: list[dict], source_name: str, session) -> dict:
     """Persiste une liste d'enregistrements standards, quelle que soit la source.
+    Chaque record est committé individuellement : un échec sur un record
+    n'affecte jamais les autres (isolation au niveau de la transaction).
     Retourne un dict de stats {created, updated, sightings, errors}."""
     source = session.query(Source).filter_by(name=source_name).first()
     if not source:
@@ -78,7 +80,7 @@ def store_records(records: list[dict], source_name: str, session) -> dict:
 
     for record in records:
         try:
-            value = record["value"]
+            value = record["value"][:2048]  # tronque pour respecter la limite de colonne
             ioc_type = record["type"]
             seen_at = record.get("seen_at") or datetime.utcnow()
 
@@ -92,7 +94,6 @@ def store_records(records: list[dict], source_name: str, session) -> dict:
             if not indicator.last_seen or seen_at > indicator.last_seen:
                 indicator.last_seen = seen_at
 
-            # Tags (fusion avec l'existant, pas écrasement)
             # Métadonnées brutes du collecteur (fusion avec l'existant)
             if record.get("metadata"):
                 indicator.raw_metadata = {
@@ -103,6 +104,7 @@ def store_records(records: list[dict], source_name: str, session) -> dict:
             # Tags normalisés (relation many-to-many)
             for tag_name in record.get("tag_names") or []:
                 attach_tag(session, indicator, tag_name)
+
             # Sighting
             session.add(Sighting(
                 indicator_id=indicator.id,
@@ -111,12 +113,13 @@ def store_records(records: list[dict], source_name: str, session) -> dict:
                 context=record.get("context") or {},
             ))
 
+            session.commit()
             stats["created" if created else "updated"] += 1
             stats["sightings"] += 1
 
         except Exception as e:
+            session.rollback()
             stats["errors"] += 1
             logger.error(f"Erreur sur '{record.get('value', '?')}' : {e}")
 
-    session.commit()
     return stats

@@ -44,7 +44,7 @@ def test_feodo_parse_fields():
     record = FeodoCollector().parse(FEODO_FIXTURE)[0]
     assert record["value"] == "185.220.101.47"
     assert record["type"] == IOCType.ip
-    assert record["tags"]["malware"] == "Dridex"
+    assert record["metadata"]["malware"] == "Dridex"
     assert record["context"]["port"] == 443
     assert record["context"]["country"] == "DE"
     assert isinstance(record["seen_at"], datetime)
