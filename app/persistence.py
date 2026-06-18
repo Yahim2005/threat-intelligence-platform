@@ -18,7 +18,7 @@ import logging
 from datetime import datetime
 from app.models import Indicator, Sighting, Source, Tag
 from app.models.enums import IOCType, IndicatorStatus, TLPLevel
-
+from sqlalchemy.exc import IntegrityError
 logger = logging.getLogger(__name__)
 
 
@@ -26,6 +26,14 @@ def get_or_create_indicator(
     session, value: str, ioc_type: IOCType, source_id=None
 ) -> tuple[Indicator, bool]:
     """Cherche un indicateur (même value + même type). Le crée s'il n'existe pas.
+
+    Gère les races conditions : si un autre thread/process a créé le même
+    indicateur entre notre lecture et notre écriture (scénario réel avec le
+    scheduler qui fait tourner plusieurs collecteurs en parallèle), l'INSERT
+    échoue avec une violation de contrainte unique. Dans ce cas, on annule
+    notre tentative et on relit — l'autre thread a gagné la course, on récupère
+    simplement sa ligne au lieu de planter.
+
     Retourne (indicator, created)."""
     indicator = (
         session.query(Indicator)
@@ -44,7 +52,23 @@ def get_or_create_indicator(
         source_id=source_id,
     )
     session.add(indicator)
-    session.flush()  # obtient l'ID sans committer, pour pouvoir créer le Sighting
+    try:
+        session.flush()  # obtient l'ID sans committer, pour pouvoir créer le Sighting
+    except IntegrityError:
+        # Un autre thread a créé cet indicateur entre notre lecture et notre écriture.
+        session.rollback()
+        indicator = (
+            session.query(Indicator)
+            .filter_by(value=value, type=ioc_type)
+            .first()
+        )
+        if indicator is None:
+            # Cas extrêmement improbable : l'autre transaction a aussi été
+            # annulée entre-temps. On relance l'exception, le retry global
+            # de store_records (à ajouter) s'en occupera.
+            raise
+        return indicator, False
+
     return indicator, True
 
 def get_or_create_tag(session, name: str) -> Tag:
