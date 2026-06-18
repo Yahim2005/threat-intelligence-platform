@@ -13,7 +13,7 @@ from datetime import datetime
 
 import httpx
 
-from app.models.enums import IOCType
+from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
 
 logger = logging.getLogger(__name__)
@@ -43,10 +43,14 @@ class OpenPhishCollector(BaseCollector):
             url = line.strip()
             if not url or not url.startswith("http"):
                 continue
-
+            normalized = detect_and_normalize(url)
+            if normalized is None:
+                logger.warning(f"[OpenPhish] Type non détecté, ignoré : '{url}'")
+                continue
+            value, ioc_type = normalized
             records.append({
-                "value":   url,
-                "type":    IOCType.url,
+                "value":   value,
+                "type":    ioc_type,
                 "seen_at": datetime.utcnow(),
                 "metadata": {
                     "threat_type": "phishing",

@@ -9,10 +9,13 @@ import logging
 from datetime import datetime
 import httpx 
 
-from app.models.enums import IOCType
+from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
 
+import logging
 logger = logging.getLogger(__name__)
+
+
 
 FEODO_URL = "https://feodotracker.abuse.ch/downloads/ipblocklist.json"
 
@@ -48,10 +51,14 @@ class FeodoCollector(BaseCollector):
                 seen_at = datetime.utcnow()
 
             malware = entry.get("malware", "").strip()
-
+            normalized = detect_and_normalize(ip)
+            if normalized is None:
+                logger.warning(f"[abuse.ch - Feodo] Type non détecté, ignoré : '{ip}'")
+                continue
+            value, ioc_type = normalized
             records.append({
-                "value":   ip,
-                "type":    IOCType.ip,
+                "value":   value,
+                "type":    ioc_type,
                 "seen_at": seen_at,
                 "metadata": {
                     "malware": malware,

@@ -19,8 +19,8 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-
 from app.models.enums import IOCType
+from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
 
 load_dotenv()
@@ -177,9 +177,16 @@ class OTXCollector(BaseCollector):
                 except ValueError:
                     seen_at = datetime.utcnow()
 
+                normalized = detect_and_normalize(value)
+                if normalized is None:
+                    logger.warning(f"[OTX] Type non détecté, ignoré : '{value}'")
+                    continue
+
+                norm_value, norm_type = normalized
+
                 records.append({
-                    "value":   value,
-                    "type":    OTX_TYPE_MAP[otx_type],
+                    "value":   norm_value,
+                    "type":    norm_type,
                     "seen_at": seen_at,
                     "metadata": {
                         "pulse_name": pulse_name,

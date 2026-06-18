@@ -6,8 +6,10 @@ from datetime import datetime
 
 import httpx
 
-from app.models.enums import IOCType
+from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
+import logging
+logger = logging.getLogger(__name__)
 
 TOR_EXIT_URL = "https://check.torproject.org/torbulkexitlist"
 
@@ -26,9 +28,14 @@ class TorExitCollector(BaseCollector):
             ip = line.strip()
             if not ip:
                 continue
+            normalized = detect_and_normalize(ip)
+            if normalized is None:
+                logger.warning(f"[Tor Project - Exit List] Type non détecté, ignoré : '{ip}'")
+                continue
+            value, ioc_type = normalized
             records.append({
-                "value": ip,
-                "type": IOCType.ip,
+                "value": value,
+                "type": ioc_type,
                 "seen_at": now,
                 "metadata": {"source": "tor_exit"},
                 "tag_names": ["tor-exit"],

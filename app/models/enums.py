@@ -3,6 +3,7 @@ import enum
 
 class IOCType(str, enum.Enum):
     ip = "ip"
+    ipv6 = "ipv6"
     domain = "domain"
     url = "url"
     md5 = "md5"
@@ -11,6 +12,7 @@ class IOCType(str, enum.Enum):
     email = "email"
     cidr   = "cidr" 
     cve   = "cve"
+    asn = "asn"
 
 
 class TLPLevel(str, enum.Enum):

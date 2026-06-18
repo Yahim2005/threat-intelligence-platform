@@ -14,7 +14,8 @@ from datetime import datetime
 
 import httpx
 
-from app.models.enums import IOCType
+#from app.models.enums import IOCType
+from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
 
 logger = logging.getLogger(__name__)
@@ -70,10 +71,14 @@ class URLhausCollector(BaseCollector):
                 seen_at = datetime.utcnow()
 
             threat = row.get("threat", "").strip()
-
+            normalized = detect_and_normalize(value)
+            if normalized is None:
+                logger.warning(f"[abuse.ch - URLhaus] Type non détecté, ignoré : '{value}'")
+                continue
+            value, ioc_type = normalized
             records.append({
                 "value":   value,
-                "type":    IOCType.url,
+                "type":    ioc_type,
                 "seen_at": seen_at,
                 "metadata": {"threat": threat, "source": "urlhaus"} if threat
                             else {"source": "urlhaus"},

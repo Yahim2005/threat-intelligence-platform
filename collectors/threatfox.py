@@ -11,8 +11,9 @@ from datetime import datetime
 import httpx
 from dotenv import load_dotenv
 
-from app.models.enums import IOCType
+from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
+from app.models.enums import IOCType
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -88,7 +89,11 @@ class ThreatFoxCollector(BaseCollector):
                 seen_at = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S UTC")
             except ValueError:
                 seen_at = datetime.utcnow()
-
+            normalized = detect_and_normalize(value)
+            if normalized is None:
+                logger.warning(f"[abuse.ch - ThreatFox] Type non détecté, ignoré : '{value}'")
+                continue
+            value, ioc_type = normalized
             records.append({
                 "value":   value,
                 "type":    ioc_type,

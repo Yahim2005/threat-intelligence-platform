@@ -10,8 +10,9 @@ from datetime import datetime
 
 import httpx
 
-from app.models.enums import IOCType
+
 from collectors.base import BaseCollector
+from core.normalize import detect_and_normalize
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +53,14 @@ class SpamhausDropCollector(BaseCollector):
 
             if not cidr:
                 continue
-
+            normalized = detect_and_normalize(cidr)
+            if normalized is None:
+                logger.warning(f"[Spamhaus - DROP] Type non détecté, ignoré : '{cidr}'")
+                continue
+            value, ioc_type = normalized
             records.append({
-                "value":   cidr,
-                "type":    IOCType.cidr,
+                "value":   value,
+                "type":    ioc_type,
                 "seen_at": datetime.utcnow(),
                 "metadata": {
                     "source": "spamhaus_drop",

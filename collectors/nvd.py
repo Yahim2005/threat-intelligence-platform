@@ -15,6 +15,11 @@ import httpx
 from app.models.enums import IOCType
 from collectors.base import BaseCollector
 
+import logging
+
+from core.normalize import detect_and_normalize
+logger = logging.getLogger(__name__)
+
 NVD_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 RESULTS_PER_PAGE = 2000
 # Pause entre deux requêtes. Avec une clé API (50 req/30s), 0.7s est large.
@@ -89,10 +94,14 @@ class NvdCollector(BaseCollector):
                     base_score = cvss_data.get("baseScore")
                     base_severity = metric_list[0].get("baseSeverity")
                     break
-
+            normalized = detect_and_normalize(cve_id)
+            if normalized is None:
+                logger.warning(f"[NVD] Type non détecté, ignoré : '{cve_id}'")
+                continue
+            value, ioc_type = normalized
             records.append({
-                "value": cve_id,
-                "type": IOCType.cve,
+                "value": value,
+                "type": ioc_type,
                 "seen_at": seen_at,
                 "metadata": {
                     "description": description,

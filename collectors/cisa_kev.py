@@ -1,12 +1,13 @@
 """Collecteur CISA KEV : catalogue des vulnérabilités activement exploitées.
 Source : JSON statique, sans auth, sans rate limit, mis à jour quotidiennement.
 """
+import logging
 from datetime import datetime
 
-import httpx
-
-from app.models.enums import IOCType
 from collectors.base import BaseCollector
+from core.normalize import detect_and_normalize
+
+logger = logging.getLogger(__name__)
 
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
@@ -21,14 +22,24 @@ class CisaKevCollector(BaseCollector):
     def parse(self, raw: dict) -> list[dict]:
         records = []
         for vuln in raw.get("vulnerabilities", []):
+            cve_id = vuln.get("cveID")
+            if not cve_id:
+                continue
+
+            normalized = detect_and_normalize(cve_id)
+            if normalized is None:
+                logger.warning(f"[CISA KEV] Type non détecté, ignoré : '{cve_id}'")
+                continue
+            value, ioc_type = normalized
+
             try:
                 seen_at = datetime.strptime(vuln["dateAdded"], "%Y-%m-%d")
             except (ValueError, KeyError):
                 seen_at = datetime.utcnow()
 
             records.append({
-                "value": vuln["cveID"],
-                "type": IOCType.cve,
+                "value": value,
+                "type": ioc_type,
                 "seen_at": seen_at,
                 "metadata": {
                     "vendor": vuln.get("vendorProject"),
