@@ -9,6 +9,8 @@ import httpx
 from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
 import logging
+
+from core.tags import make_tag
 logger = logging.getLogger(__name__)
 
 TOR_EXIT_URL = "https://check.torproject.org/torbulkexitlist"
@@ -38,7 +40,7 @@ class TorExitCollector(BaseCollector):
                 "type": ioc_type,
                 "seen_at": now,
                 "metadata": {"source": "tor_exit"},
-                "tag_names": ["tor-exit"],
+                "tag_names": [make_tag("source", "tor-exit")],
                 "context": {},
             })
         return records

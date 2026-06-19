@@ -13,6 +13,7 @@ import httpx
 
 from collectors.base import BaseCollector
 from core.normalize import detect_and_normalize
+from core.tags import make_tag
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ class SpamhausDropCollector(BaseCollector):
                 "metadata": {
                     "source": "spamhaus_drop",
                 },
-                "tag_names": [],
+                "tag_names": [make_tag("kind", "spam")],
                 "context": {
                     "sbl_reference": sbl_ref,
                 },

@@ -17,6 +17,7 @@ import httpx
 #from app.models.enums import IOCType
 from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
+from core.tags import make_tag
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ class URLhausCollector(BaseCollector):
                 "seen_at": seen_at,
                 "metadata": {"threat": threat, "source": "urlhaus"} if threat
                             else {"source": "urlhaus"},
-                "tag_names": [f"threat:{threat}"] if threat else [],
+                "tag_names": [make_tag("kind", threat)] if threat else [],
                 "context": {
                     "urlhaus_id": row.get("id"),
                     "url_status": row.get("url_status"),

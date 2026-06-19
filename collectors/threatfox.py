@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
 from app.models.enums import IOCType
+from core.tags import make_tag
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -94,13 +95,21 @@ class ThreatFoxCollector(BaseCollector):
                 logger.warning(f"[abuse.ch - ThreatFox] Type non détecté, ignoré : '{value}'")
                 continue
             value, ioc_type = normalized
+            malware = entry.get("malware_printable", "").strip()
+            threat_type = entry.get("threat_type", "").strip()
+            tag_names = []
+            if malware:
+                tag_names.append(make_tag("malware", malware))
+            if threat_type:
+                tag_names.append(make_tag("kind", threat_type))
             records.append({
                 "value":   value,
                 "type":    ioc_type,
                 "seen_at": seen_at,
+                "tag_names": tag_names,
                 "metadata": {
-                    "malware":     entry.get("malware_printable", "").strip(),
-                    "threat_type": entry.get("threat_type", "").strip(),
+                    "malware":     malware,
+                    "threat_type": threat_type,
                     "source":      "threatfox",
                 },
                 "context": {

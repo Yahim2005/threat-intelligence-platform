@@ -18,6 +18,7 @@ from collectors.base import BaseCollector
 import logging
 
 from core.normalize import detect_and_normalize
+from core.tags import make_tag
 logger = logging.getLogger(__name__)
 
 NVD_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
@@ -109,7 +110,7 @@ class NvdCollector(BaseCollector):
                     "cvss_severity": base_severity,
                     "source": "nvd",
                 },
-                "tag_names": ["cve"],
+                "tag_names": [make_tag("kind", "vulnerability")], 
                 "context": {"vuln_status": cve.get("vulnStatus")},
             })
         return records

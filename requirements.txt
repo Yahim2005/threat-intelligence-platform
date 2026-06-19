@@ -19,3 +19,5 @@ PyYAML==6.0.3
 SQLAlchemy==2.0.41
 typing_extensions==4.15.0
 tzlocal==5.4.3
+stix2==3.0.1
+stix2==3.0.1

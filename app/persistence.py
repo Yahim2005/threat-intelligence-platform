@@ -16,7 +16,7 @@ Format d'un enregistrement standard :
 """
 import logging
 from datetime import datetime
-from app.models import Indicator, Sighting, Source, Tag
+from app.models import Indicator, Sighting, Source, Tag, source
 from app.models.enums import IOCType, IndicatorStatus, TLPLevel
 from sqlalchemy.exc import IntegrityError
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_or_create_indicator(
-    session, value: str, ioc_type: IOCType, source_id=None
+    session, value: str, ioc_type: IOCType, source_id=None, tlp: TLPLevel = TLPLevel.CLEAR
 ) -> tuple[Indicator, bool]:
     """Cherche un indicateur (même value + même type). Le crée s'il n'existe pas.
 
@@ -54,12 +54,12 @@ def get_or_create_indicator(
     indicator = Indicator(
         value=value,
         type=ioc_type,
-        tlp=TLPLevel.CLEAR,
+        tlp=tlp,
         confidence=50,
         status=status,
         raw_metadata={"quality_reason": quality.reason} if quality.is_false_positive else None,
         source_id=source_id,
-)
+    )
     session.add(indicator)
     try:
         session.flush()  # obtient l'ID sans committer, pour pouvoir créer le Sighting
@@ -118,7 +118,7 @@ def store_records(records: list[dict], source_name: str, session) -> dict:
             seen_at = record.get("seen_at") or datetime.utcnow()
 
             indicator, created = get_or_create_indicator(
-                session, value, ioc_type, source.id
+                session, value, ioc_type, source.id, tlp=source.tlp
             )
 
             # Fenêtre temporelle

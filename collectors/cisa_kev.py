@@ -6,6 +6,7 @@ from datetime import datetime
 
 from collectors.base import BaseCollector
 from core.normalize import detect_and_normalize
+from core.tags import make_tag
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class CisaKevCollector(BaseCollector):
                     "name": vuln.get("vulnerabilityName"),
                     "source": "cisa_kev",
                 },
-                "tag_names": ["kev", "cve"],
+                "tag_names": [make_tag("kind", "vulnerability"), make_tag("source", "kev")],
                 "context": {
                     "due_date": vuln.get("dueDate"),
                     "ransomware_use": vuln.get("knownRansomwareCampaignUse"),

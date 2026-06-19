@@ -15,6 +15,7 @@ import httpx
 
 from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
+from core.tags import make_tag
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ class OpenPhishCollector(BaseCollector):
                     "threat_type": "phishing",
                     "source":      "openphish",
                 },
-                "tag_names": [],
+                "tag_names": [make_tag("kind", "phishing")],
                 "context": {},
             })
 

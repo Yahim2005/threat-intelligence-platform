@@ -34,7 +34,8 @@ def test_kev_parse_fields():
     record = CisaKevCollector().parse(KEV_FIXTURE)[0]
     assert record["type"] == IOCType.cve
     assert record["value"] == "CVE-2026-54420"
-    assert record["tag_names"] == ["kev", "cve"]
+    assert record["tag_names"] == ["kind:vulnerability", "source:kev"]
+
     assert record["metadata"]["vendor"] == "LiteSpeed"
     assert isinstance(record["seen_at"], datetime)
 
@@ -56,7 +57,7 @@ def test_tor_exit_parse_fields():
     record = TorExitCollector().parse(TOR_EXIT_FIXTURE)[0]
     assert record["type"] == IOCType.ip
     assert record["value"] == "171.25.193.25"
-    assert record["tag_names"] == ["tor-exit"]
+    assert record["tag_names"] == ["source:tor-exit"]
 
 
 # ── NVD ──────────────────────────────────────────────────────────────────────
@@ -92,7 +93,7 @@ def test_nvd_parse_fields():
     record = NvdCollector().parse(NVD_FIXTURE)[0]
     assert record["type"] == IOCType.cve
     assert record["value"] == "CVE-1999-0095"
-    assert record["tag_names"] == ["cve"]
+    assert record["tag_names"] == ["kind:vulnerability"]
     assert record["metadata"]["cvss_score"] == 10.0
     assert record["metadata"]["cvss_severity"] == "HIGH"
     assert record["metadata"]["description"] == "The debug command in Sendmail is enabled."

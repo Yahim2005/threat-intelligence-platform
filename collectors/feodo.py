@@ -13,6 +13,8 @@ from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
 
 import logging
+
+from core.tags import make_tag
 logger = logging.getLogger(__name__)
 
 
@@ -64,7 +66,7 @@ class FeodoCollector(BaseCollector):
                     "malware": malware,
                     "source":  "feodo",
                 } if malware else {"source": "feodo"},
-                "tag_names": [malware] if malware else [],
+                "tag_names": [make_tag("malware", malware)] if malware else [],
                 "context": {
                     "port":    entry.get("port"),
                     "status":  entry.get("status"),
