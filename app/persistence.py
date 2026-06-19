@@ -19,6 +19,11 @@ from datetime import datetime
 from app.models import Indicator, Sighting, Source, Tag
 from app.models.enums import IOCType, IndicatorStatus, TLPLevel
 from sqlalchemy.exc import IntegrityError
+
+from core.quality import check_quality
+
+from core import quality
+from core.quality import check_quality
 logger = logging.getLogger(__name__)
 
 
@@ -43,14 +48,18 @@ def get_or_create_indicator(
     if indicator:
         return indicator, False
 
+    quality = check_quality(value, ioc_type)
+    status = IndicatorStatus.whitelisted if quality.is_false_positive else IndicatorStatus.active
+
     indicator = Indicator(
         value=value,
         type=ioc_type,
         tlp=TLPLevel.CLEAR,
         confidence=50,
-        status=IndicatorStatus.active,
+        status=status,
+        raw_metadata={"quality_reason": quality.reason} if quality.is_false_positive else None,
         source_id=source_id,
-    )
+)
     session.add(indicator)
     try:
         session.flush()  # obtient l'ID sans committer, pour pouvoir créer le Sighting

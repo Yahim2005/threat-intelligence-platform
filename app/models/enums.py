@@ -27,6 +27,8 @@ class IndicatorStatus(str, enum.Enum):
     active = "active"
     inactive = "inactive"
     revoked = "revoked"
+    whitelisted = "whitelisted"
+    expired = "expired"
 
 
 class SourceType(str, enum.Enum):

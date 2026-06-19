@@ -1,0 +1,21 @@
+# Règles d'allowlisting anti-faux-positifs.
+# Tout IOC qui matche une de ces règles est marqué `whitelisted` au lieu de `active`.
+
+public_dns_ips:
+  - "8.8.8.8"          # Google Public DNS
+  - "8.8.4.4"          # Google Public DNS secondaire
+  - "1.1.1.1"          # Cloudflare DNS
+  - "1.0.0.1"          # Cloudflare DNS secondaire
+  - "9.9.9.9"          # Quad9
+  - "149.112.112.112"  # Quad9 secondaire
+  - "208.67.222.222"   # OpenDNS
+  - "208.67.220.220"   # OpenDNS secondaire
+
+extra_allowed_cidrs:
+  # Plages supplémentaires à exclure, en plus des plages RFC1918/loopback/etc.
+  # détectées automatiquement par le module ipaddress.
+  []
+
+extra_allowed_domains:
+  # Domaines à exclure manuellement, en plus de la liste Tranco.
+  []
