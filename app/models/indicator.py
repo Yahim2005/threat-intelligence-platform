@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from app.models.enrichment import Enrichment
     from app.models.attack_mapping import AttackMapping
     from app.models.tag import Tag
+    from app.models.reputation import ReputationCache
 class Indicator(Base):
     __tablename__ = "indicators"
     __table_args__ = (
@@ -60,4 +61,7 @@ class Indicator(Base):
     )
     attack_mappings: Mapped[list["AttackMapping"]] = relationship(
         "AttackMapping", back_populates="indicator", cascade="all, delete-orphan"
+    )
+    reputation_cache: Mapped[list["ReputationCache"]] = relationship(
+        "ReputationCache", back_populates="indicator", cascade="all, delete-orphan"
     )

@@ -8,3 +8,4 @@ from app.models.threat import Threat
 from app.models.relationship import TIPRelationship
 from app.models.tag import Tag, indicator_tags
 from app.models.collection_run import CollectionRun
+from app.models.reputation import ReputationCache
