@@ -1,0 +1,27 @@
+# Demi-vies de décroissance par type d'IOC (en jours)
+# La demi-vie est le temps au bout duquel la pertinence est réduite de moitié.
+# Modèle exponentiel : factor = e^(-ln(2) / half_life * age_days)
+#
+# Calibration :
+#   - Trop courte → perte d'IOCs utiles (faux négatifs)
+#   - Trop longue → accumulation de bruit (faux positifs)
+# Ces valeurs sont des défauts raisonnables, à ajuster selon ton environnement.
+
+half_lives:
+  url:    7      # Campagnes phishing courtes, domaines suspendus rapidement
+  ip:     30     # IPs réutilisées, changent de mains
+  ipv6:   30     # Idem
+  domain: 60     # Domaines actifs plus longtemps
+  md5:    365    # Hashes immuables — restent pertinents longtemps
+  sha1:   365
+  sha256: 365
+  cve:    180    # Vulnérabilités patchées mais réexploitées
+  cidr:   60     # Blocs IP changent lentement
+  asn:    90     # ASNs très stables
+  email:  45     # Adresses spam abandonnées rapidement
+
+# Seuil de score en dessous duquel un indicateur passe en `expired`
+expiry_threshold: 15
+
+# Seuil de score en dessous duquel on émet un warning (indicateur dégradé)
+warning_threshold: 30
