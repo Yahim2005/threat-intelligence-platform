@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from app.models.attack_mapping import AttackMapping
     from app.models.tag import Tag
     from app.models.reputation import ReputationCache
-    #from app.models.threat import Threat
+    from app.models.threat import Threat
 class Indicator(Base):
     __tablename__ = "indicators"
     __table_args__ = (
