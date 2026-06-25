@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum as SAEnum, String
+from sqlalchemy import DateTime, Enum as SAEnum, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -17,4 +17,6 @@ class TIPRelationship(Base):
     relationship_type: Mapped[RelationshipType] = mapped_column(
         SAEnum(RelationshipType), nullable=False
     )
+    confidence: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    rule: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

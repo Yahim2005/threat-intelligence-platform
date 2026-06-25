@@ -49,6 +49,9 @@ class RelationshipType(str, enum.Enum):
     targets = "targets"
     attributed_to = "attributed-to"
     mitigates = "mitigates"
+    resolves_to = "resolves_to"
+    same_source_batch = "same_source_batch"
+    same_tag = "same_tag"
     
 class RunStatus(str, enum.Enum):
     running = "running"
