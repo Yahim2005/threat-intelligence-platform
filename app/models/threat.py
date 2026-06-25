@@ -1,12 +1,26 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum as SAEnum, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Column, DateTime, Enum as SAEnum, ForeignKey, String, Table, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 from app.models.enums import TLPLevel, ThreatType
+
+if TYPE_CHECKING:
+    from app.models.indicator import Indicator
+
+# Table de jointure many-to-many déclarée explicitement
+threat_indicators = Table(
+    "threat_indicators",
+    Base.metadata,
+    Column("threat_id", PGUUID(as_uuid=True), ForeignKey("threats.id", ondelete="CASCADE"), primary_key=True),
+    Column("indicator_id", PGUUID(as_uuid=True), ForeignKey("indicators.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class Threat(Base):
@@ -22,3 +36,9 @@ class Threat(Base):
     )
     stix_id: Mapped[str | None] = mapped_column(String(255), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    indicators: Mapped[list["Indicator"]] = relationship(
+        "Indicator",
+        secondary=threat_indicators,
+        back_populates="threats",
+    )

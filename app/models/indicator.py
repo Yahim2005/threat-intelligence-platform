@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
+from app.models.threat import threat_indicators
 from app.models.base import Base
 from app.models.enums import IOCType, IndicatorStatus, TLPLevel
 
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from app.models.attack_mapping import AttackMapping
     from app.models.tag import Tag
     from app.models.reputation import ReputationCache
+    #from app.models.threat import Threat
 class Indicator(Base):
     __tablename__ = "indicators"
     __table_args__ = (
@@ -65,3 +66,9 @@ class Indicator(Base):
     reputation_cache: Mapped[list["ReputationCache"]] = relationship(
         "ReputationCache", back_populates="indicator", cascade="all, delete-orphan"
     )
+    threats: Mapped[list["Threat"]] = relationship(
+        "Threat",
+        secondary=threat_indicators,
+        back_populates="indicators",
+    )
+    
