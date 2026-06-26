@@ -1,13 +1,16 @@
 # api/main.py
 
 from __future__ import annotations
+from dotenv import load_dotenv
+load_dotenv()
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Indicator
-from api import queries, schemas
+# nouveau
+from api import queries, schemas, exports
 
 
 app = FastAPI(
@@ -15,6 +18,7 @@ app = FastAPI(
     description="API REST pour accéder aux IOCs, sources, threats et statistiques.",
     version="1.0.0",
 )
+app.include_router(exports.router)
 
 
 # ─── Dépendance DB ───────────────────────────────────────────────────────────
