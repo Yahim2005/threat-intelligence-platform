@@ -17,3 +17,4 @@ __pycache__/
 .vscode/settings.json.state/
 .state/
 data/*.mmdb
+node_modules
