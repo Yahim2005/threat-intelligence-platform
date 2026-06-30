@@ -65,18 +65,18 @@ def test_csv_rows_match_type_filter():
 # ─── STIX ────────────────────────────────────────────────────────────────────
 
 def test_stix_returns_200():
-    response = client.get("/export/stix?type=ip&confidence_min=80", headers=HEADERS)
+    response = client.get("/export/stix?type=sha256&confidence_min=70", headers=HEADERS)
     assert response.status_code == 200
 
 def test_stix_is_valid_bundle():
-    response = client.get("/export/stix?type=ip&confidence_min=80", headers=HEADERS)
+    response = client.get("/export/stix?type=sha256&confidence_min=70", headers=HEADERS)
     data = response.json()
     assert data["type"] == "bundle"
     assert "objects" in data
     assert isinstance(data["objects"], list)
 
 def test_stix_objects_are_indicators():
-    response = client.get("/export/stix?type=ip&confidence_min=80", headers=HEADERS)
+    response = client.get("/export/stix?type=sha256&confidence_min=70", headers=HEADERS)
     data = response.json()
     for obj in data["objects"]:
         assert obj["type"] == "indicator"
@@ -84,7 +84,7 @@ def test_stix_objects_are_indicators():
         assert "pattern" in obj
 
 def test_stix_pattern_format():
-    response = client.get("/export/stix?type=ip&confidence_min=80", headers=HEADERS)
+    response = client.get("/export/stix?type=sha256&confidence_min=70", headers=HEADERS)
     data = response.json()
     for obj in data["objects"]:
         # Pattern doit commencer par [ et finir par ]
@@ -92,7 +92,7 @@ def test_stix_pattern_format():
         assert obj["pattern"].endswith("]")
 
 def test_stix_tlp_marking():
-    response = client.get("/export/stix?type=ip&confidence_min=80", headers=HEADERS)
+    response = client.get("/export/stix?type=sha256&confidence_min=70", headers=HEADERS)
     data = response.json()
     for obj in data["objects"]:
         assert "object_marking_refs" in obj

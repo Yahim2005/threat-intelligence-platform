@@ -59,19 +59,21 @@ def make_indicator(
     return ind
 
 
-def make_session(sighting_count: int = 1) -> MagicMock:
+def make_session(sighting_count: int = 1, distinct_sources: int = 1) -> MagicMock:
     session = MagicMock()
     sighting_q = MagicMock()
     sighting_q.filter_by.return_value.count.return_value = sighting_count
+    diversity_q = MagicMock()
+    diversity_q.filter_by.return_value.filter.return_value.distinct.return_value.count.return_value = distinct_sources
     reputation_q = MagicMock()
     reputation_q.filter_by.return_value.filter.return_value.all.return_value = []
-
     def query_side(model):
         from app.models.sighting import Sighting
         if model is Sighting:
             return sighting_q
+        if hasattr(model, "class_") and model.class_ is Sighting:
+            return diversity_q
         return reputation_q
-
     session.query.side_effect = query_side
     return session
 

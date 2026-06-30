@@ -77,15 +77,40 @@ def make_reputation(
     return r
 
 
-def make_session(sighting_count: int = 0, reputations: list = None) -> MagicMock:
-    """Session mockée qui retourne un nombre de sightings et des réputations."""
+def make_tag(name: str):
+    """Construit un objet Tag minimal (mock léger, pas un vrai modèle SQLAlchemy
+    pour éviter d'avoir besoin d'une session en mémoire dans ces tests unitaires)."""
+    tag = MagicMock()
+    tag.name = name
+    return tag
+
+
+def make_session(
+    sighting_count: int = 0,
+    reputations: list = None,
+    distinct_sources: int = 1,
+) -> MagicMock:
+    """Session mockée qui retourne un nombre de sightings, de sources
+    distinctes, et des réputations.
+
+    Deux requêtes différentes portent sur Sighting :
+    - _compute_corroboration       : query(Sighting).filter_by().count()
+    - _compute_source_diversity    : query(Sighting.source_ref).filter_by().filter().distinct().count()
+    On les distingue via l'argument passé à session.query() (colonne vs modèle).
+    """
     session = MagicMock()
 
-    # Mock pour _compute_corroboration : session.query(Sighting).filter_by().count()
+    # _compute_corroboration : session.query(Sighting).filter_by().count()
     sighting_query = MagicMock()
     sighting_query.filter_by.return_value.count.return_value = sighting_count
 
-    # Mock pour _compute_external_reputation : session.query(ReputationCache).filter_by().filter().all()
+    # _compute_source_diversity : session.query(Sighting.source_ref).filter_by().filter().distinct().count()
+    diversity_query = MagicMock()
+    diversity_query.filter_by.return_value.filter.return_value.distinct.return_value.count.return_value = (
+        distinct_sources
+    )
+
+    # _compute_external_reputation : session.query(ReputationCache).filter_by().filter().all()
     reputation_query = MagicMock()
     reputation_query.filter_by.return_value.filter.return_value.all.return_value = (
         reputations or []
@@ -93,8 +118,11 @@ def make_session(sighting_count: int = 0, reputations: list = None) -> MagicMock
 
     def query_side_effect(model):
         from app.models.sighting import Sighting
+        # model est soit la classe Sighting, soit l'attribut Sighting.source_ref
         if model is Sighting:
             return sighting_query
+        if hasattr(model, "class_") and model.class_ is Sighting:
+            return diversity_query
         return reputation_query
 
     session.query.side_effect = query_side_effect
@@ -210,12 +238,14 @@ class TestScenarios:
 
     def test_strong_indicator_scores_high(self):
         """
-        Scénario : IOC vu par CISA (A), 5 sightings, AbuseIPDB=90, vu hier.
+        Scénario : IOC vu par CISA (A), 5 sightings sur 4 sources distinctes,
+        AbuseIPDB=90, vu hier, tag malware identifié.
         Attendu : score élevé (> 80).
         """
         ind = make_indicator(source_name="cisa_kev", last_seen_days_ago=1)
+        ind.tags = [make_tag("malware:emotet")]
         rep = make_reputation(ind.id, "abuseipdb", abuse_score=90)
-        session = make_session(sighting_count=5, reputations=[rep])
+        session = make_session(sighting_count=5, distinct_sources=4, reputations=[rep])
         result = compute_confidence(ind, session)
         assert result["score"] > 80
 
