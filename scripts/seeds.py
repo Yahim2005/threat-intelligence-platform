@@ -61,6 +61,12 @@ SOURCES = [
         "source_type": SourceType.api,
         "tlp": TLPLevel.CLEAR,
     },
+    {
+        "name": "abuse.ch - MalwareBazaar",
+        "url": "https://mb-api.abuse.ch/api/v1/",
+        "source_type": SourceType.api,
+        "tlp": TLPLevel.CLEAR,
+    },
 ]
 
 

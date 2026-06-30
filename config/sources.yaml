@@ -41,3 +41,7 @@ sources:
     class: "collectors.nvd.NvdCollector"
     interval_minutes: 1440
     enabled: true
+  - name: "abuse.ch - MalwareBazaar"
+    class: "collectors.malwarebazaar.MalwareBazaarCollector"
+    interval_minutes: 240
+    enabled: true

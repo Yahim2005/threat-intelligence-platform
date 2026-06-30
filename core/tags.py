@@ -27,11 +27,22 @@ def normalize_tag(raw: str) -> str:
     return value
 
 
+# Limite de la colonne tags.name en base (VARCHAR(255)).
+MAX_TAG_LENGTH = 255
+
+
 def make_tag(namespace: str, value: str) -> str:
-    """Construit un tag namespacé normalisé : make_tag('kind', 'C2 Server') -> 'kind:c2-server'."""
+    """Construit un tag namespacé normalisé : make_tag('kind', 'C2 Server') -> 'kind:c2-server'.
+
+    Tronque le résultat à MAX_TAG_LENGTH si nécessaire (garde-fou : certaines
+    sources OSINT génèrent des valeurs très longues, ex. noms de domaines C2
+    utilisés directement comme tag malware)."""
     ns = normalize_tag(namespace)
     val = normalize_tag(value)
-    return f"{ns}:{val}"
+    tag = f"{ns}:{val}"
+    if len(tag) > MAX_TAG_LENGTH:
+        tag = tag[:MAX_TAG_LENGTH].rstrip("-:")
+    return tag
 
 
 # Namespaces connus, pour validation optionnelle / documentation.
