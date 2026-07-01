@@ -12,6 +12,8 @@ import { Menu, Search } from 'lucide-react'
 import ThreatDetail from './pages/ThreatDetail'
 import Analytics from './pages/Analytics'
 import SubmitIOC from './components/SubmitIOC'
+import { useDarkMode } from './hooks/useDarkMode'
+import { Moon, Sun } from 'lucide-react'
 
 export default function App() {
   const [page,        setPage]        = useState('overview')
@@ -19,6 +21,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('')
   const [detailValue, setDetailValue] = useState(null)   // valeur IOC sélectionnée
   const [threatId, setThreatId] = useState(null)
+  const [dark, setDark] = useDarkMode()
 
   function navigate(id) {
     setPage(id)
@@ -92,6 +95,13 @@ export default function App() {
             className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm rounded-xl hover:bg-indigo-700 disabled:opacity-40 transition-colors"
           >
             <Search size={13} /> Lookup
+          </button>
+          <button
+            onClick={() => setDark(d => !d)}
+            className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors"
+            title={dark ? 'Mode clair' : 'Mode sombre'}
+          >
+            {dark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           <SubmitIOC onSuccess={() => {}} />
         </header>

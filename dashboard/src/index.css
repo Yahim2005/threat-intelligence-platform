@@ -1,1 +1,132 @@
 @import "tailwindcss";
+
+/* ── Variables de thème ─────────────────────────────────────────── */
+:root {
+  --bg-base:        #f9fafb;
+  --bg-card:        #ffffff;
+  --bg-subtle:      #f3f4f6;
+  --bg-input:       #f9fafb;
+  --border:         #e5e7eb;
+  --border-subtle:  #f3f4f6;
+  --text-primary:   #111827;
+  --text-secondary: #374151;
+  --text-muted:     #6b7280;
+  --text-faint:     #9ca3af;
+  --shadow:         0 1px 3px rgba(0,0,0,0.08);
+}
+
+.dark {
+  --bg-base:        #0f172a;
+  --bg-card:        #1e293b;
+  --bg-subtle:      #162032;
+  --bg-input:       #1e293b;
+  --border:         #334155;
+  --border-subtle:  #1e293b;
+  --text-primary:   #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted:     #94a3b8;
+  --text-faint:     #64748b;
+  --shadow:         0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* ── Reset de base ──────────────────────────────────────────────── */
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+/* ── Cards et surfaces ──────────────────────────────────────────── */
+.bg-white {
+  background-color: var(--bg-card) !important;
+}
+.bg-gray-50 {
+  background-color: var(--bg-subtle) !important;
+}
+.bg-gray-100 {
+  background-color: var(--bg-subtle) !important;
+}
+
+/* ── Bordures ───────────────────────────────────────────────────── */
+.border-gray-100 {
+  border-color: var(--border-subtle) !important;
+}
+.border-gray-200 {
+  border-color: var(--border) !important;
+}
+.divide-gray-50 > * + * {
+  border-color: var(--border-subtle) !important;
+}
+
+/* ── Textes ─────────────────────────────────────────────────────── */
+.text-gray-800, .text-gray-900 {
+  color: var(--text-primary) !important;
+}
+.text-gray-700 {
+  color: var(--text-secondary) !important;
+}
+.text-gray-600 {
+  color: var(--text-secondary) !important;
+}
+.text-gray-500 {
+  color: var(--text-muted) !important;
+}
+.text-gray-400 {
+  color: var(--text-faint) !important;
+}
+.text-gray-300 {
+  color: var(--text-faint) !important;
+}
+
+/* ── Header / Topbar ────────────────────────────────────────────── */
+header {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border) !important;
+}
+
+/* ── Inputs et selects ──────────────────────────────────────────── */
+input, select, textarea {
+  background-color: var(--bg-input) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+input::placeholder {
+  color: var(--text-faint) !important;
+}
+
+/* ── Tables ─────────────────────────────────────────────────────── */
+thead, thead tr {
+  background-color: var(--bg-subtle) !important;
+}
+.hover\:bg-gray-50:hover {
+  background-color: var(--bg-subtle) !important;
+}
+
+/* ── Shadows ────────────────────────────────────────────────────── */
+.shadow-sm {
+  box-shadow: var(--shadow) !important;
+}
+
+/* ── Sidebar — toujours dark, pas affectée par le thème ─────────── */
+aside {
+  background-color: #0f172a !important;
+}
+
+/* ── Modal backdrop ─────────────────────────────────────────────── */
+.dark .bg-gray-900 {
+  background-color: #020617 !important;
+}
+
+/* ── Scrollbar en dark mode ─────────────────────────────────────── */
+.dark ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
