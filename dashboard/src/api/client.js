@@ -18,6 +18,7 @@ export const api = {
   sources:        ()           => get('/sources'),
   threats:        (page = 1)   => get(`/threats?page=${page}&page_size=20`),
   lookupByValue:  (value)      => get(`/indicators/${encodeURIComponent(value)}`),
+  threatDetail: (id) => get(`/threats/${id}`),
   indicators:     (params = {}) => {
     const q = new URLSearchParams()
     Object.entries(params).forEach(([k, v]) => {

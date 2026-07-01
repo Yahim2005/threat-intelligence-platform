@@ -96,3 +96,26 @@ class AlertResponse(BaseModel):
     source: Optional[str]
     last_seen: Optional[str]
     tags: list[str]
+    
+class ThreatIndicatorResponse(BaseModel):
+    id: str
+    value: str
+    type: str
+    confidence: Optional[int]
+    status: str
+    source: Optional[str]
+    last_seen: Optional[str]
+    tags: list[str]
+
+class ThreatDetailResponse(BaseModel):
+    id: str
+    name: str
+    threat_type: str
+    description: Optional[str]
+    tlp: str
+    created_at: Optional[str]
+    indicator_count: int
+    avg_confidence: Optional[float]
+    top_tags: list[str]
+    indicators_by_type: dict[str, int]
+    indicators: list[ThreatIndicatorResponse]

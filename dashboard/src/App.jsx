@@ -9,12 +9,14 @@ import Health          from './pages/Health'
 import Lookup          from './pages/Lookup'
 import IndicatorDetail from './pages/IndicatorDetail'
 import { Menu, Search } from 'lucide-react'
+import ThreatDetail from './pages/ThreatDetail'
 
 export default function App() {
   const [page,        setPage]        = useState('overview')
   const [sidebarOpen, setSidebar]     = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [detailValue, setDetailValue] = useState(null)   // valeur IOC sélectionnée
+  const [threatId, setThreatId] = useState(null)
 
   function navigate(id) {
     setPage(id)
@@ -40,10 +42,17 @@ export default function App() {
     if (page === 'lookup')     return <Lookup initialQuery={searchQuery} onOpenDetail={openDetail} />
     if (page === 'overview')   return <Overview onOpenDetail={openDetail} />
     if (page === 'indicators') return <Indicators onOpenDetail={openDetail} />
-    if (page === 'threats')    return <Threats />
+    if (page === 'threats') return <Threats onOpenThreat={openThreat} />
     if (page === 'sources')    return <Sources />
     if (page === 'health')     return <Health />
+    if (page === 'threat-detail') return <ThreatDetail threatId={threatId} onBack={() => navigate('threats')} onOpenDetail={openDetail} />
     return null
+  }
+
+  function openThreat(id) {
+    setThreatId(id)
+    setPage('threat-detail')
+    setSidebar(false)
   }
 
   return (

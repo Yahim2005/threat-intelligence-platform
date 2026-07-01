@@ -268,6 +268,15 @@ def list_sources(request: Request, db: Session = Depends(get_db)):
         for source, count in rows
     ]
 
+@app.get("/threats/{threat_id}", response_model=schemas.ThreatDetailResponse, tags=["Threats"])
+@limiter.limit("60/minute")
+def get_threat(threat_id: str, request: Request, db: Session = Depends(get_db)):
+    """Retourne le détail complet d'un cluster de menaces."""
+    result = queries.get_threat_by_id(db, threat_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Threat '{threat_id}' introuvable.")
+    return schemas.ThreatDetailResponse(**result)
+
 
 # ─── Routes : Threats ─────────────────────────────────────────────────────────
 

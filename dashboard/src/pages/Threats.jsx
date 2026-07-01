@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Shield, ChevronLeft, ChevronRight } from 'lucide-react'
 
-export default function Threats() {
+export default function Threats({ onOpenThreat }) {
   const [data, setData]       = useState([])
   const [loading, setLoading] = useState(true)
   const [page, setPage]       = useState(1)
@@ -26,7 +26,7 @@ export default function Threats() {
       ) : (
         <div className="space-y-3">
           {data.map(t => (
-            <div key={t.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <div key={t.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 hover:border-indigo-200 hover:shadow-md transition-all cursor-pointer" onClick={() => onOpenThreat && onOpenThreat(t.id)}>
               <div className="flex items-start gap-3">
                 <div className="p-2 bg-red-50 rounded-lg mt-0.5">
                   <Shield size={16} className="text-red-500" />

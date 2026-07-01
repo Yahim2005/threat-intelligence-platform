@@ -247,6 +247,7 @@ def get_ingestion_trends(session: Session, days: int = 30) -> list[dict]:
     )
 
     return [{"date": str(row.day), "count": int(row.total)} for row in rows]
+
 def get_alerts(session: Session, threshold: int = 75, hours: int = 24, limit: int = 20) -> list[dict]:
     """
     Retourne les IOCs actifs haute confiance vus récemment.
@@ -278,3 +279,62 @@ def get_alerts(session: Session, threshold: int = 75, hours: int = 24, limit: in
         }
         for r in rows
     ]
+    
+def get_threat_by_id(session: Session, threat_id: str) -> Optional[dict]:
+    """
+    Retourne le détail complet d'un Threat : métadonnées + IOCs + stats.
+    """
+    from app.models.threat import Threat
+
+    threat = session.query(Threat).filter(Threat.id == threat_id).first()
+    if not threat:
+        return None
+
+    indicators = threat.indicators
+
+    # Stats agrégées
+    confidences = [i.confidence for i in indicators if i.confidence is not None]
+    avg_confidence = round(sum(confidences) / len(confidences), 2) if confidences else None
+
+    # Top tags sur l'ensemble des IOCs du cluster
+    tag_counts: dict[str, int] = {}
+    for ind in indicators:
+        for tag in ind.tags:
+            tag_counts[tag.name] = tag_counts.get(tag.name, 0) + 1
+    top_tags = sorted(tag_counts, key=lambda k: tag_counts[k], reverse=True)[:10]
+
+    # Répartition par type d'IOC
+    type_counts: dict[str, int] = {}
+    for ind in indicators:
+        t = str(ind.type.value if hasattr(ind.type, "value") else ind.type)
+        type_counts[t] = type_counts.get(t, 0) + 1
+
+    # Liste des IOCs (50 premiers par confidence)
+    sorted_inds = sorted(indicators, key=lambda i: i.confidence or 0, reverse=True)[:50]
+    ioc_list = [
+        {
+            "id": str(i.id),
+            "value": i.value,
+            "type": str(i.type.value if hasattr(i.type, "value") else i.type),
+            "confidence": i.confidence,
+            "status": str(i.status.value if hasattr(i.status, "value") else i.status),
+            "source": i.source.name if i.source else None,
+            "last_seen": i.last_seen.isoformat() if i.last_seen else None,
+            "tags": [t.name for t in i.tags],
+        }
+        for i in sorted_inds
+    ]
+
+    return {
+        "id": str(threat.id),
+        "name": threat.name,
+        "threat_type": str(threat.threat_type.value if hasattr(threat.threat_type, "value") else threat.threat_type),
+        "description": threat.description,
+        "tlp": str(threat.tlp.value if hasattr(threat.tlp, "value") else threat.tlp),
+        "created_at": threat.created_at.isoformat() if threat.created_at else None,
+        "indicator_count": len(indicators),
+        "avg_confidence": avg_confidence,
+        "top_tags": top_tags,
+        "indicators_by_type": type_counts,
+        "indicators": ioc_list,
+    }
