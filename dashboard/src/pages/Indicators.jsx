@@ -11,7 +11,7 @@ const TLPS     = ['', 'CLEAR', 'GREEN', 'AMBER', 'RED']
 
 const DEFAULT_FILTERS = {
   type: '', status: 'active', tlp: '',
-  confidence_min: '', source: '', search: '',
+  confidence_min: '', source: '', tag: '', search: '',
 }
 
 export default function Indicators({ onOpenDetail }) {
@@ -36,6 +36,7 @@ export default function Indicators({ onOpenDetail }) {
     if (f.tlp)            params.tlp            = f.tlp
     if (f.confidence_min) params.confidence_min = f.confidence_min
     if (f.source)         params.source         = f.source
+    if (f.tag)            params.tag            = f.tag
     if (f.search)         params.search         = f.search
     api.indicators(params)
       .then(setData)
@@ -123,6 +124,20 @@ export default function Indicators({ onOpenDetail }) {
         </div>
 
         {/* Actions */}
+        {/* Recherche textuelle */}
+        {/* Tag */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500">Tag</label>
+          <input
+            type="text"
+            value={draft.tag}
+            onChange={e => setDraft(d => ({ ...d, tag: e.target.value }))}
+            onKeyDown={e => { if (e.key === 'Enter') apply() }}
+            placeholder="malware:emotet"
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 w-36"
+          />
+        </div>
+
         {/* Recherche textuelle */}
         <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
           <label className="text-xs text-gray-500">Recherche</label>
