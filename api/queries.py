@@ -459,3 +459,34 @@ def create_indicator_manual(session: Session, data: dict) -> dict:
         "source": source.name,
         "created": created,
     }
+    
+def get_collection_runs(session: Session, limit: int = 50) -> list[dict]:
+    """Retourne les derniers runs de collecte triés par date décroissante."""
+    from app.models.collection_run import CollectionRun
+
+    rows = (
+        session.query(CollectionRun)
+        .join(CollectionRun.source)
+        .order_by(CollectionRun.started_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        {
+            "id": str(r.id),
+            "source": r.source.name if r.source else "—",
+            "started_at": r.started_at.isoformat() if r.started_at else None,
+            "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+            "status": str(r.status.value if hasattr(r.status, "value") else r.status),
+            "items_created": r.items_created,
+            "items_updated": r.items_updated,
+            "items_errors": r.items_errors,
+            "error_message": r.error_message,
+            "duration_s": (
+                round((r.finished_at - r.started_at).total_seconds())
+                if r.finished_at and r.started_at else None
+            ),
+        }
+        for r in rows
+    ]

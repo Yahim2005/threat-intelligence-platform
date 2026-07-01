@@ -16,6 +16,7 @@ export const api = {
   health:         ()           => get('/health'),
   metrics:        ()           => get('/metrics'),
   sources:        ()           => get('/sources'),
+  collectionRuns: (limit = 50) => get(`/collection-runs?limit=${limit}`),
   topSources:             (limit = 10) => get(`/analytics/top-sources?limit=${limit}`),
   topTags:                (limit = 10) => get(`/analytics/top-tags?limit=${limit}`),
   confidenceDistribution: ()           => get(`/analytics/confidence-distribution`),

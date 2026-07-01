@@ -143,3 +143,15 @@ class GeoIPData(BaseModel):
     longitude: Optional[float]
     asn: Optional[int]
     asn_org: Optional[str]
+    
+class CollectionRunResponse(BaseModel):
+    id: str
+    source: str
+    started_at: Optional[str]
+    finished_at: Optional[str]
+    status: str
+    items_created: int
+    items_updated: int
+    items_errors: int
+    error_message: Optional[str]
+    duration_s: Optional[int]

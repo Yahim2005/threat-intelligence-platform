@@ -384,6 +384,16 @@ def get_confidence_distribution(
     """Distribution des scores de confiance par tranches de 10."""
     return queries.get_confidence_distribution(db)
 
+@app.get("/collection-runs", response_model=list[schemas.CollectionRunResponse], tags=["Observability"])
+@limiter.limit("60/minute")
+def get_collection_runs(
+    request: Request,
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """Retourne l'historique des runs de collecte."""
+    return queries.get_collection_runs(db, limit=limit)
+
 # ─── Routes : Stats ───────────────────────────────────────────────────────────
 
 @app.get("/stats/trends", response_model=list[schemas.TrendPointResponse], tags=["Analytics"])
