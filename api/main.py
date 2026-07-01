@@ -311,6 +311,39 @@ def get_alerts(
     results = queries.get_alerts(db, threshold=threshold, hours=hours, limit=limit)
     return [schemas.AlertResponse(**r) for r in results]
 
+# ─── Routes : Analytics avancée ───────────────────────────────────────────────
+
+@app.get("/analytics/top-sources", response_model=list[schemas.NameCountResponse], tags=["Analytics"])
+@limiter.limit("60/minute")
+def get_top_sources(
+    request: Request,
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """Top sources par volume d'IOCs."""
+    return queries.get_top_sources(db, limit=limit)
+
+
+@app.get("/analytics/top-tags", response_model=list[schemas.NameCountResponse], tags=["Analytics"])
+@limiter.limit("60/minute")
+def get_top_tags(
+    request: Request,
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """Top tags malware par nombre d'IOCs."""
+    return queries.get_top_tags(db, limit=limit)
+
+
+@app.get("/analytics/confidence-distribution", response_model=list[schemas.RangeCountResponse], tags=["Analytics"])
+@limiter.limit("60/minute")
+def get_confidence_distribution(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Distribution des scores de confiance par tranches de 10."""
+    return queries.get_confidence_distribution(db)
+
 # ─── Routes : Stats ───────────────────────────────────────────────────────────
 
 @app.get("/stats/trends", response_model=list[schemas.TrendPointResponse], tags=["Analytics"])

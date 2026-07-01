@@ -119,3 +119,11 @@ class ThreatDetailResponse(BaseModel):
     top_tags: list[str]
     indicators_by_type: dict[str, int]
     indicators: list[ThreatIndicatorResponse]
+    
+class NameCountResponse(BaseModel):
+    name: str
+    count: int
+
+class RangeCountResponse(BaseModel):
+    range: str
+    count: int

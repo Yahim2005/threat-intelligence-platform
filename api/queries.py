@@ -340,3 +340,56 @@ def get_threat_by_id(session: Session, threat_id: str) -> Optional[dict]:
         "indicators_by_type": type_counts,
         "indicators": ioc_list,
     }
+    
+def get_top_sources(session: Session, limit: int = 10) -> list[dict]:
+    """Top sources par nombre d'IOCs."""
+    rows = (
+        session.query(Source.name, func.count(Indicator.id).label("count"))
+        .join(Indicator, Indicator.source_id == Source.id)
+        .group_by(Source.name)
+        .order_by(func.count(Indicator.id).desc())
+        .limit(limit)
+        .all()
+    )
+    return [{"name": row.name, "count": int(row.count)} for row in rows]
+
+
+def get_top_tags(session: Session, limit: int = 10) -> list[dict]:
+    """Top tags malware par nombre d'IOCs associés."""
+    from app.models.tag import Tag
+
+    rows = (
+        session.query(Tag.name, func.count(Indicator.id).label("count"))
+        .join(Indicator.tags)
+        .filter(Tag.name.like("malware:%"))
+        .group_by(Tag.name)
+        .order_by(func.count(Indicator.id).desc())
+        .limit(limit)
+        .all()
+    )
+    return [{"name": row.name, "count": int(row.count)} for row in rows]
+
+
+def get_confidence_distribution(session: Session) -> list[dict]:
+    """
+    Distribution des scores de confiance par tranches de 10.
+    Retourne des buckets : 0-9, 10-19, … 90-100.
+    """
+    from sqlalchemy import case, Integer
+    from sqlalchemy import cast
+
+    bucket = (func.floor(Indicator.confidence / 10) * 10).label("bucket")
+
+    rows = (
+        session.query(bucket, func.count(Indicator.id).label("count"))
+        .filter(Indicator.confidence.isnot(None))
+        .filter(Indicator.status == "active")
+        .group_by(bucket)
+        .order_by(bucket)
+        .all()
+    )
+
+    return [
+        {"range": f"{int(row.bucket)}-{int(row.bucket) + 9}", "count": int(row.count)}
+        for row in rows
+    ]

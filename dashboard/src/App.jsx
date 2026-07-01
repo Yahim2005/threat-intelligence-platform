@@ -10,6 +10,7 @@ import Lookup          from './pages/Lookup'
 import IndicatorDetail from './pages/IndicatorDetail'
 import { Menu, Search } from 'lucide-react'
 import ThreatDetail from './pages/ThreatDetail'
+import Analytics from './pages/Analytics'
 
 export default function App() {
   const [page,        setPage]        = useState('overview')
@@ -45,6 +46,7 @@ export default function App() {
     if (page === 'threats') return <Threats onOpenThreat={openThreat} />
     if (page === 'sources')    return <Sources />
     if (page === 'health')     return <Health />
+    if (page === 'analytics') return <Analytics />
     if (page === 'threat-detail') return <ThreatDetail threatId={threatId} onBack={() => navigate('threats')} onOpenDetail={openDetail} />
     return null
   }
