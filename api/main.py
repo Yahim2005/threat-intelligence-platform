@@ -115,6 +115,22 @@ def _str_enum(val) -> Optional[str]:
 
 
 def _serialize_indicator(ind: Indicator) -> schemas.IndicatorResponse:
+    # Extraction GeoIP depuis les enrichissements
+    geoip = None
+    if hasattr(ind, "enrichments") and ind.enrichments:
+        for e in ind.enrichments:
+            if e.provider == "geoip" and e.data:
+                geoip = schemas.GeoIPData(
+                    country_code=e.data.get("country_code"),
+                    country_name=e.data.get("country_name"),
+                    city=e.data.get("city"),
+                    latitude=e.data.get("latitude"),
+                    longitude=e.data.get("longitude"),
+                    asn=e.data.get("asn"),
+                    asn_org=e.data.get("asn_org"),
+                )
+                break
+
     return schemas.IndicatorResponse(
         id=str(ind.id),
         value=ind.value,
@@ -129,6 +145,7 @@ def _serialize_indicator(ind: Indicator) -> schemas.IndicatorResponse:
         attack_techniques=[
             m.technique_id for m in ind.attack_mappings
         ] if hasattr(ind, "attack_mappings") and ind.attack_mappings else [],
+        geoip=geoip,
     )
 
 

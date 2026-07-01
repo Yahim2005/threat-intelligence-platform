@@ -9,18 +9,18 @@ from pydantic import BaseModel
 # ─── Indicator ───────────────────────────────────────────────────────────────
 
 class IndicatorResponse(BaseModel):
-    id: str                        # UUID sérialisé en string
+    id: str
     value: str
     type: str
     status: str
-    confidence: Optional[int]      # 0-100, s'appelle confidence en base
+    confidence: Optional[int]
     tlp: Optional[str]
     first_seen: Optional[datetime]
     last_seen: Optional[datetime]
-    source: Optional[str]          # nom de la source (FK simple)
+    source: Optional[str]
     tags: list[str]
     attack_techniques: list[str]
-
+    geoip: Optional[GeoIPData] = None
     model_config = {"from_attributes": True}
 
 
@@ -134,3 +134,12 @@ class IndicatorCreate(BaseModel):
     tlp: str = "CLEAR"
     tags: list[str] = []
     source_name: str = "Manual Entry"
+    
+class GeoIPData(BaseModel):
+    country_code: Optional[str]
+    country_name: Optional[str]
+    city: Optional[str]
+    latitude: Optional[float]
+    longitude: Optional[float]
+    asn: Optional[int]
+    asn_org: Optional[str]
