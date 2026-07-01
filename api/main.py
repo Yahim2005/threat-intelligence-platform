@@ -131,6 +131,28 @@ def _serialize_indicator(ind: Indicator) -> schemas.IndicatorResponse:
                 )
                 break
 
+    # Score breakdown depuis raw_metadata
+    score_breakdown = None
+    if ind.raw_metadata and "score_components" in ind.raw_metadata:
+        components = ind.raw_metadata["score_components"]
+        weights = {
+            "source_reliability": 0.22,
+            "corroboration":      0.18,
+            "source_diversity":   0.17,
+            "type_bonus":         0.16,
+            "recency":            0.14,
+            "malware_tag_bonus":  0.08,
+            "external_reputation": 0.05,
+        }
+        score_breakdown = {
+            k: {
+                "value":       round(v, 4),
+                "weight":      weights.get(k, 0),
+                "contribution": round(v * weights.get(k, 0) * 100, 1),
+            }
+            for k, v in components.items()
+        }
+
     return schemas.IndicatorResponse(
         id=str(ind.id),
         value=ind.value,
@@ -146,6 +168,7 @@ def _serialize_indicator(ind: Indicator) -> schemas.IndicatorResponse:
             m.technique_id for m in ind.attack_mappings
         ] if hasattr(ind, "attack_mappings") and ind.attack_mappings else [],
         geoip=geoip,
+        score_breakdown=score_breakdown,
     )
 
 

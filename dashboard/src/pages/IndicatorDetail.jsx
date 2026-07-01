@@ -112,6 +112,42 @@ export default function IndicatorDetail({ value, onBack }) {
           <MetaRow label="Confidence">{ind.confidence ?? '—'} / 100</MetaRow>
         </Section>
 
+{/* Score breakdown */}
+{ind.score_breakdown && (
+  <Section icon={BarChart2} title="Décomposition du score">
+    <div className="space-y-2">
+      {[
+        { key: 'source_reliability',  label: 'Fiabilité source',       color: 'bg-indigo-500' },
+        { key: 'corroboration',       label: 'Corroboration',          color: 'bg-blue-500' },
+        { key: 'source_diversity',    label: 'Diversité des sources',  color: 'bg-cyan-500' },
+        { key: 'type_bonus',          label: 'Type IOC',               color: 'bg-violet-500' },
+        { key: 'recency',             label: 'Récence',                color: 'bg-emerald-500' },
+        { key: 'malware_tag_bonus',   label: 'Tag malware',            color: 'bg-amber-500' },
+        { key: 'external_reputation', label: 'Réputation externe',     color: 'bg-rose-400' },
+      ].map(({ key, label, color }) => {
+        const item = ind.score_breakdown[key]
+        if (!item) return null
+        const pct = Math.round(item.value * 100)
+        return (
+          <div key={key} className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 w-36 shrink-0">{label}</span>
+            <div className="flex-1 bg-gray-100 rounded-full h-2">
+              <div
+                className={`${color} h-2 rounded-full transition-all`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <span className="text-xs text-gray-500 tabular-nums w-8 text-right">{pct}%</span>
+            <span className="text-xs text-gray-400 tabular-nums w-12 text-right">+{item.contribution}</span>
+          </div>
+        )
+      })}
+    </div>
+    <p className="text-xs text-gray-400 mt-3">
+      Contribution = valeur × poids × 100. Score total = somme des contributions.
+    </p>
+  </Section>
+)}
         {/* Tags + MITRE */}
         
         <div className="space-y-5">

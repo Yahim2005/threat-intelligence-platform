@@ -21,6 +21,7 @@ class IndicatorResponse(BaseModel):
     tags: list[str]
     attack_techniques: list[str]
     geoip: Optional[GeoIPData] = None
+    score_breakdown: Optional[dict] = None
     model_config = {"from_attributes": True}
 
 
