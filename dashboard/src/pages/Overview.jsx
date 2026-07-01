@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell,
   LineChart, Line, CartesianGrid
 } from 'recharts'
-import { AlertTriangle, CheckCircle, Clock, ShieldOff } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Clock, ShieldOff, Download } from 'lucide-react'
 import { api } from '../api/client'
 import StatCard from '../components/StatCard'
 import AlertsPanel from '../components/AlertsPanel'
@@ -17,6 +17,7 @@ export default function Overview({ onOpenDetail }) {
   const [trends, setTrends] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState(null)
+  const [exporting, setExporting] = useState(null)
 
   useEffect(() => {
     Promise.all([api.stats(), api.trends(30)])
@@ -42,9 +43,56 @@ export default function Overview({ onOpenDetail }) {
     label: d.date.slice(5).replace('-', '/'),
   }))
 
+
+function downloadExport(format) {
+  const apiKey = import.meta.env.VITE_API_KEY ?? ''
+  const filenames = { stix: 'export.json', csv: 'export.csv', blocklist: 'blocklist.txt' }
+  const urls = {
+    stix:      '/api/export/stix',
+    csv:       '/api/export/csv',
+    blocklist: '/api/export/blocklist',
+  }
+
+  setExporting(format)
+  fetch(urls[format], { headers: { 'X-API-Key': apiKey } })
+    .then(res => res.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filenames[format]
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    })
+    .catch(console.error)
+    .finally(() => setExporting(null))
+}
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-gray-800">Overview</h1>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-xl font-bold text-gray-800">Overview</h1>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 mr-1">Exporter :</span>
+          {[
+            { format: 'stix',      label: 'STIX',      color: 'bg-purple-600 hover:bg-purple-700' },
+            { format: 'csv',       label: 'CSV',        color: 'bg-emerald-600 hover:bg-emerald-700' },
+            { format: 'blocklist', label: 'Blocklist',  color: 'bg-gray-700 hover:bg-gray-800' },
+          ].map(({ format, label, color }) => (
+            <button
+              key={format}
+              onClick={() => downloadExport(format)}
+              disabled={exporting !== null}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-white text-xs rounded-lg transition-colors disabled:opacity-50 ${color}`}
+            >
+              <Download size={12} className={exporting === format ? 'animate-spin' : ''} />
+              {exporting === format ? 'Export…' : label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
