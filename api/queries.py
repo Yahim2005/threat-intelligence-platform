@@ -1,11 +1,13 @@
 # api/queries.py
 
+
 from __future__ import annotations
 from typing import Optional
+from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-
 from app.models import Indicator, Source, Tag, Threat
+from app.models.enums import TLPLevel
 
 
 # ─── Indicators ──────────────────────────────────────────────────────────────
@@ -393,3 +395,67 @@ def get_confidence_distribution(session: Session) -> list[dict]:
         {"range": f"{int(row.bucket)}-{int(row.bucket) + 9}", "count": int(row.count)}
         for row in rows
     ]
+    
+def create_indicator_manual(session: Session, data: dict) -> dict:
+    """
+    Crée manuellement un IOC en passant par le pipeline de normalisation.
+    Retourne l'indicateur créé ou existant.
+    """
+    from core.normalize import detect_and_normalize
+    from app.persistence import get_or_create_indicator, get_or_create_tag, attach_tag
+    from app.models.enums import IOCType
+
+    value = data["value"].strip()
+    tlp_str = data.get("tlp", "CLEAR")
+    tag_names = data.get("tags", [])
+    source_name = data.get("source_name", "Manual Entry")
+
+    # Normalisation
+    normalized = detect_and_normalize(value)
+    if not normalized:
+        raise ValueError(f"Valeur non reconnue comme IOC valide : {value}")
+
+    norm_value, ioc_type_str = normalized
+    ioc_type = IOCType(ioc_type_str)
+    tlp = TLPLevel[tlp_str] if tlp_str in TLPLevel.__members__ else TLPLevel.CLEAR
+
+    # Source "Manual Entry"
+    source = session.query(Source).filter(Source.name == source_name).first()
+    if not source:
+        source = Source(
+            id=uuid4(),
+            name=source_name,
+            url=None,
+            tlp=tlp,
+            is_active=True,
+        )
+        session.add(source)
+        session.flush()
+
+    # Création ou récupération de l'indicateur
+    ind, created = get_or_create_indicator(
+        session,
+        value=norm_value,
+        ioc_type=ioc_type,
+        source_id=source.id,
+        tlp=tlp,
+    )
+    session.flush()
+
+    # Tags additionnels
+    # Tags additionnels
+    for tag_name in tag_names:
+        attach_tag(session, ind, tag_name)
+
+    session.commit()
+
+    return {
+        "id": str(ind.id),
+        "value": ind.value,
+        "type": str(ind.type.value if hasattr(ind.type, "value") else ind.type),
+        "status": str(ind.status.value if hasattr(ind.status, "value") else ind.status),
+        "confidence": ind.confidence,
+        "tlp": str(ind.tlp.value if hasattr(ind.tlp, "value") else ind.tlp),
+        "source": source.name,
+        "created": created,
+    }

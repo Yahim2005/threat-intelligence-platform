@@ -127,3 +127,10 @@ class NameCountResponse(BaseModel):
 class RangeCountResponse(BaseModel):
     range: str
     count: int
+    
+class IndicatorCreate(BaseModel):
+    value: str
+    type: Optional[str] = None        # auto-détecté si absent
+    tlp: str = "CLEAR"
+    tags: list[str] = []
+    source_name: str = "Manual Entry"

@@ -172,6 +172,29 @@ def get_metrics():
         "requests_by_path": dict(_metrics["requests_by_path"]),
     }
 
+@app.post("/indicators", response_model=schemas.IndicatorResponse, tags=["Indicators"])
+@limiter.limit("30/minute")
+def submit_indicator(
+    request: Request,
+    body: schemas.IndicatorCreate,
+    db: Session = Depends(get_db),
+):
+    """
+    Soumet manuellement un IOC dans la plateforme.
+    La valeur est normalisée et le type auto-détecté si non fourni.
+    """
+    try:
+        result = queries.create_indicator_manual(db, body.model_dump())
+        # On retourne l'indicateur complet
+        ind = queries.get_indicator_by_value(db, result["value"])
+        if ind:
+            return _serialize_indicator(ind)
+        raise HTTPException(status_code=500, detail="Erreur lors de la création.")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error("submit_indicator_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ─── Routes : Indicators ──────────────────────────────────────────────────────
 

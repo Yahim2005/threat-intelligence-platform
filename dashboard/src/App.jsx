@@ -11,6 +11,7 @@ import IndicatorDetail from './pages/IndicatorDetail'
 import { Menu, Search } from 'lucide-react'
 import ThreatDetail from './pages/ThreatDetail'
 import Analytics from './pages/Analytics'
+import SubmitIOC from './components/SubmitIOC'
 
 export default function App() {
   const [page,        setPage]        = useState('overview')
@@ -92,6 +93,7 @@ export default function App() {
           >
             <Search size={13} /> Lookup
           </button>
+          <SubmitIOC onSuccess={() => {}} />
         </header>
         <main className="flex-1 p-4 lg:p-8 overflow-auto">
           {renderPage()}
