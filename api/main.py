@@ -282,7 +282,23 @@ def list_threats(
     results, total = queries.get_threats(db, page=page, page_size=page_size)
     return [schemas.ThreatResponse(**r) for r in results]
 
+# ─── Routes : Alerts ──────────────────────────────────────────────────────────
 
+@app.get("/alerts", response_model=list[schemas.AlertResponse], tags=["Alerts"])
+@limiter.limit("60/minute")
+def get_alerts(
+    request: Request,
+    threshold: int = Query(75, ge=0, le=100, description="Score minimum de confiance"),
+    hours: int = Query(24, ge=1, le=720, description="Fenêtre temporelle en heures (max 30 jours)"),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """
+    Retourne les IOCs actifs haute confiance vus récemment.
+    Utilisé par le panneau d'alertes du dashboard.
+    """
+    results = queries.get_alerts(db, threshold=threshold, hours=hours, limit=limit)
+    return [schemas.AlertResponse(**r) for r in results]
 
 # ─── Routes : Stats ───────────────────────────────────────────────────────────
 

@@ -9,6 +9,9 @@ async function get(path) {
 
 export const api = {
   stats:          ()           => get('/stats'),
+  related:        (value)      => get(`/indicators/${encodeURIComponent(value)}/related`),
+  timeline:       (value, days = 30) => get(`/indicators/${encodeURIComponent(value)}/timeline?days=${days}`),
+  alerts: (threshold = 75, hours = 168) => get(`/alerts?threshold=${threshold}&hours=${hours}`),
   trends:         (days = 30)  => get(`/stats/trends?days=${days}`),
   health:         ()           => get('/health'),
   metrics:        ()           => get('/metrics'),

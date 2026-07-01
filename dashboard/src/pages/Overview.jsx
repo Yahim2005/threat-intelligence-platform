@@ -8,11 +8,11 @@ import {
 import { AlertTriangle, CheckCircle, Clock, ShieldOff } from 'lucide-react'
 import { api } from '../api/client'
 import StatCard from '../components/StatCard'
-
+import AlertsPanel from '../components/AlertsPanel'
 const TYPE_COLORS = ['#6366f1','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6','#ec4899']
 const TLP_COLORS  = { CLEAR: '#9ca3af', GREEN: '#10b981', AMBER: '#f59e0b', AMBER_STRICT: '#f97316', RED: '#ef4444' }
 
-export default function Overview() {
+export default function Overview({ onOpenDetail }) {
   const [stats, setStats]   = useState(null)
   const [trends, setTrends] = useState([])
   const [loading, setLoading] = useState(true)
@@ -121,6 +121,8 @@ export default function Overview() {
             />
           </LineChart>
         </ResponsiveContainer>
+        {/* Alertes haute confiance */}
+<AlertsPanel onOpenDetail={onOpenDetail} />
       </div>
     </div>
   )

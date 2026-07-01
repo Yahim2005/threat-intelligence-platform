@@ -87,3 +87,12 @@ class TimelinePointResponse(BaseModel):
 class TrendPointResponse(BaseModel):
     date: str        # "2026-06-15"
     count: int
+    
+class AlertResponse(BaseModel):
+    id: str
+    value: str
+    type: str
+    confidence: int
+    source: Optional[str]
+    last_seen: Optional[str]
+    tags: list[str]

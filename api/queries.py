@@ -247,3 +247,34 @@ def get_ingestion_trends(session: Session, days: int = 30) -> list[dict]:
     )
 
     return [{"date": str(row.day), "count": int(row.total)} for row in rows]
+def get_alerts(session: Session, threshold: int = 75, hours: int = 24, limit: int = 20) -> list[dict]:
+    """
+    Retourne les IOCs actifs haute confiance vus récemment.
+    threshold : score minimum (défaut 75)
+    hours     : fenêtre temporelle en heures (défaut 24h)
+    limit     : nombre max de résultats
+    """
+    since = datetime.utcnow() - timedelta(hours=hours)
+
+    rows = (
+        session.query(Indicator)
+        .filter(Indicator.status == "active")
+        .filter(Indicator.confidence >= threshold)
+        .filter(Indicator.last_seen >= since)
+        .order_by(Indicator.confidence.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        {
+            "id": str(r.id),
+            "value": r.value,
+            "type": str(r.type.value if hasattr(r.type, "value") else r.type),
+            "confidence": r.confidence,
+            "source": r.source.name if r.source else None,
+            "last_seen": r.last_seen.isoformat() if r.last_seen else None,
+            "tags": [t.name for t in r.tags] if r.tags else [],
+        }
+        for r in rows
+    ]
