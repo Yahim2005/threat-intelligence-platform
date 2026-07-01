@@ -14,7 +14,7 @@ const DEFAULT_FILTERS = {
   confidence_min: '', source: '', search: '',
 }
 
-export default function Indicators() {
+export default function Indicators({ onOpenDetail }) {
   const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(true)
   const [page,    setPage]    = useState(1)
@@ -36,6 +36,7 @@ export default function Indicators() {
     if (f.tlp)            params.tlp            = f.tlp
     if (f.confidence_min) params.confidence_min = f.confidence_min
     if (f.source)         params.source         = f.source
+    if (f.search)         params.search         = f.search
     api.indicators(params)
       .then(setData)
       .catch(console.error)
@@ -122,6 +123,20 @@ export default function Indicators() {
         </div>
 
         {/* Actions */}
+        {/* Recherche textuelle */}
+        <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+          <label className="text-xs text-gray-500">Recherche</label>
+          <input
+            type="text"
+            value={draft.search}
+            onChange={e => setDraft(d => ({ ...d, search: e.target.value }))}
+            onKeyDown={e => { if (e.key === 'Enter') apply() }}
+            placeholder="cbmelipilla, emotet, 192.168…"
+            className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          />
+        </div>
+
+        {/* Actions */}
         <div className="flex items-center gap-2 pt-1">
           <button onClick={apply}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors">
@@ -153,7 +168,15 @@ export default function Indicators() {
               <tr><td colSpan={7} className="text-center py-12 text-gray-400">Aucun résultat</td></tr>
             ) : data?.items?.map(ind => (
               <tr key={ind.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs text-gray-700 max-w-[200px] truncate" title={ind.value}>{ind.value}</td>
+                <td className="px-4 py-3 font-mono text-xs max-w-[200px] truncate">
+                  <button
+                    onClick={() => onOpenDetail(ind.value)}
+                    className="text-indigo-600 hover:text-indigo-800 hover:underline text-left truncate w-full"
+                    title={ind.value}
+                  >
+                    {ind.value}
+                  </button>
+                </td>
                 <td className="px-4 py-3">
                   <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded text-xs font-medium">{ind.type}</span>
                 </td>

@@ -19,6 +19,7 @@ def get_indicators(
     source_name: Optional[str] = None,
     tag_slug: Optional[str] = None,
     tlp: Optional[str] = None,
+    search: Optional[str] = None,
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[Indicator], int]:
@@ -38,14 +39,15 @@ def get_indicators(
         q = q.join(Indicator.source).filter(Source.name == source_name)
     if tag_slug:
         q = q.join(Indicator.tags).filter(Tag.name == tag_slug)
+    if search:
+        q = q.filter(Indicator.value.ilike(f"%{search}%"))
 
     total = q.count()
-    # nouveau
     items = (
         q.order_by(Indicator.confidence.desc().nulls_last(), Indicator.id)
         .offset((page - 1) * page_size)
         .limit(page_size)
-        .all()  
+        .all()
     )
     return items, total
 
