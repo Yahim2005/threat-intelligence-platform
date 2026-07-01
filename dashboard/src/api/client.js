@@ -9,6 +9,7 @@ async function get(path) {
 
 export const api = {
   stats:          ()           => get('/stats'),
+  trends:         (days = 30)  => get(`/stats/trends?days=${days}`),
   health:         ()           => get('/health'),
   metrics:        ()           => get('/metrics'),
   sources:        ()           => get('/sources'),

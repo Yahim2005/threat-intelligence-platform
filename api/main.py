@@ -209,6 +209,35 @@ def list_indicators(
         items=[_serialize_indicator(i) for i in items],
     )
 
+# ─── Routes : Analytics ───────────────────────────────────────────────────────
+
+@app.get("/indicators/{value:path}/related", response_model=list[schemas.RelatedIndicatorResponse], tags=["Analytics"])
+@limiter.limit("60/minute")
+def get_related(value: str, request: Request, db: Session = Depends(get_db)):
+    """
+    Retourne les IOCs liés à `value` via le graphe de corrélation.
+    Utile pour comprendre le contexte d'un indicateur : 
+    ex. une IP peut être liée à des domaines qu'elle résout, ou à des IOCs du même batch.
+    """
+    results = queries.get_related_indicators(db, value)
+    return [schemas.RelatedIndicatorResponse(**r) for r in results]
+
+
+@app.get("/indicators/{value:path}/timeline", response_model=list[schemas.TimelinePointResponse], tags=["Analytics"])
+@limiter.limit("60/minute")
+def get_timeline(
+    value: str,
+    request: Request,
+    days: int = Query(30, ge=1, le=90, description="Nombre de jours d'historique"),
+    db: Session = Depends(get_db),
+):
+    """
+    Retourne l'historique de sightings par jour pour un indicateur.
+    Permet de voir si une menace est récente ou persistante dans le temps.
+    """
+    results = queries.get_indicator_timeline(db, value, days=days)
+    return [schemas.TimelinePointResponse(**r) for r in results]
+
 
 @app.get("/indicators/{value:path}", response_model=schemas.IndicatorResponse, tags=["Indicators"])
 @limiter.limit("60/minute")
@@ -218,6 +247,7 @@ def get_indicator(value: str, request: Request, db: Session = Depends(get_db)):
     if not ind:
         raise HTTPException(status_code=404, detail=f"Indicateur '{value}' introuvable.")
     return _serialize_indicator(ind)
+# ─── Routes : Sources ─────────────────────────────────────────────────────────
 
 
 # ─── Routes : Sources ─────────────────────────────────────────────────────────
@@ -253,7 +283,23 @@ def list_threats(
     return [schemas.ThreatResponse(**r) for r in results]
 
 
+
 # ─── Routes : Stats ───────────────────────────────────────────────────────────
+
+@app.get("/stats/trends", response_model=list[schemas.TrendPointResponse], tags=["Analytics"])
+@limiter.limit("60/minute")
+def get_trends(
+    request: Request,
+    days: int = Query(30, ge=1, le=90, description="Nombre de jours"),
+    db: Session = Depends(get_db),
+):
+    """
+    Retourne le volume d'IOCs ingérés par jour sur les N derniers jours.
+    Alimente le graphe de tendance du dashboard.
+    """
+    results = queries.get_ingestion_trends(db, days=days)
+    return [schemas.TrendPointResponse(**r) for r in results]
+
 
 @app.get("/stats", response_model=schemas.StatsResponse, tags=["Stats"])
 @limiter.limit("60/minute")

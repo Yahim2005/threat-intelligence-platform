@@ -68,3 +68,22 @@ class StatsResponse(BaseModel):
     avg_confidence: Optional[float]
     indicators_by_type: dict[str, int]
     indicators_by_tlp: dict[str, int]
+    
+# ─── Analytics ────────────────────────────────────────────────────────────────
+
+class RelatedIndicatorResponse(BaseModel):
+    value: str
+    type: str
+    confidence: Optional[int]
+    status: str
+    relationship_type: str
+    relationship_confidence: int
+    rule: Optional[str]
+
+class TimelinePointResponse(BaseModel):
+    date: str        # "2026-06-15"
+    sightings: int
+
+class TrendPointResponse(BaseModel):
+    date: str        # "2026-06-15"
+    count: int

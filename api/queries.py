@@ -149,3 +149,101 @@ def get_stats(session: Session) -> dict:
         "indicators_by_type": by_type,
         "indicators_by_tlp": by_tlp,
     }
+    # ─── Advanced Analytics ───────────────────────────────────────────────────────
+
+from datetime import datetime, timedelta
+from sqlalchemy import cast, Date
+from app.models import TIPRelationship, Sighting
+
+
+def get_related_indicators(session: Session, value: str) -> list[dict]:
+    """
+    Trouve tous les IOCs liés à `value` via la table relationships.
+    Retourne la liste avec le type de relation et la confiance.
+    """
+    # D'abord on récupère l'indicateur source
+    ind = session.query(Indicator).filter(Indicator.value == value).first()
+    if not ind:
+        return []
+
+    ind_id = str(ind.id)
+
+    # On cherche toutes les relations où cet IOC est source OU cible
+    rels = (
+        session.query(TIPRelationship)
+        .filter(
+            (TIPRelationship.source_ref == ind_id) |
+            (TIPRelationship.target_ref == ind_id)
+        )
+        .all()
+    )
+
+    results = []
+    for rel in rels:
+        # L'autre bout de la relation
+        other_id = rel.target_ref if rel.source_ref == ind_id else rel.source_ref
+
+        other = session.query(Indicator).filter(
+            Indicator.id == other_id
+        ).first()
+        if not other:
+            continue
+
+        results.append({
+            "value": other.value,
+            "type": str(other.type.value if hasattr(other.type, "value") else other.type),
+            "confidence": other.confidence,
+            "status": str(other.status.value if hasattr(other.status, "value") else other.status),
+            "relationship_type": str(rel.relationship_type.value if hasattr(rel.relationship_type, "value") else rel.relationship_type),
+            "relationship_confidence": rel.confidence,
+            "rule": rel.rule,
+        })
+
+    return results
+
+
+def get_indicator_timeline(session: Session, value: str, days: int = 30) -> list[dict]:
+    """
+    Retourne le nombre de sightings par jour sur les `days` derniers jours
+    pour l'indicateur identifié par `value`.
+    """
+    ind = session.query(Indicator).filter(Indicator.value == value).first()
+    if not ind:
+        return []
+
+    since = datetime.utcnow() - timedelta(days=days)
+
+    rows = (
+        session.query(
+            cast(Sighting.seen_at, Date).label("day"),
+            func.sum(Sighting.count).label("total"),
+        )
+        .filter(Sighting.indicator_id == ind.id)
+        .filter(Sighting.seen_at >= since)
+        .group_by(cast(Sighting.seen_at, Date))
+        .order_by(cast(Sighting.seen_at, Date))
+        .all()
+    )
+
+    return [{"date": str(row.day), "sightings": int(row.total)} for row in rows]
+
+
+def get_ingestion_trends(session: Session, days: int = 30) -> list[dict]:
+    """
+    Retourne le nombre d'indicateurs créés par jour sur les `days` derniers jours.
+    Utilisé par le dashboard pour afficher la courbe de tendance.
+    """
+    since = datetime.utcnow() - timedelta(days=days)
+
+    rows = (
+        session.query(
+            cast(Indicator.first_seen, Date).label("day"),
+            func.count(Indicator.id).label("total"),
+        )
+        .filter(Indicator.first_seen >= since)
+        .group_by(cast(Indicator.first_seen, Date))
+        .order_by(cast(Indicator.first_seen, Date))
+        .all()
+    )
+
+    return [{"date": str(row.day), "count": int(row.total)} for row in rows]
