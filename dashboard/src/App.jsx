@@ -45,7 +45,7 @@ export default function App() {
   function renderPage() {
     if (page === 'detail')     return <IndicatorDetail value={detailValue} onBack={() => navigate('indicators')} />
     if (page === 'lookup')     return <Lookup initialQuery={searchQuery} onOpenDetail={openDetail} />
-    if (page === 'overview')   return <Overview onOpenDetail={openDetail} />
+    if (page === 'overview')   return <Overview onOpenDetail={openDetail} onNavigate={navigate} />
     if (page === 'indicators') return <Indicators onOpenDetail={openDetail} />
     if (page === 'threats') return <Threats onOpenThreat={openThreat} />
     if (page === 'sources')    return <Sources />
@@ -92,7 +92,7 @@ export default function App() {
           <button
             onClick={() => { if (searchQuery.trim()) setPage('lookup') }}
             disabled={!searchQuery.trim()}
-            className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm rounded-xl hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+            className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-[#c4a882] text-white text-sm rounded-xl hover:bg-[#8b7355] disabled:opacity-40 transition-colors"
           >
             <Search size={13} /> Lookup
           </button>
