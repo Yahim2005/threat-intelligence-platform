@@ -244,7 +244,7 @@ export default function Overview({ onOpenDetail, onNavigate }) {
           </div>
         </div>
         <div className="w-96 h-80 shrink-0">
-          <ThreatGlobe height={320} />
+          <ThreatGlobe height={300} />
         </div>
       </div>
 
@@ -254,6 +254,48 @@ export default function Overview({ onOpenDetail, onNavigate }) {
         <StatCard label="IOCs actifs"    value={stats.active_indicators} sub="Statut : active"       icon={Activity}        onClick={() => onNavigate('indicators')} />
         <StatCard label="Threats"        value={stats.total_threats}     sub="Clusters corrélés"     icon={Shield}          onClick={() => onNavigate('threats')} />
         <StatCard label="Confidence moy" value={stats.avg_confidence ? Math.round(stats.avg_confidence) : 0} sub="Score moyen /100" icon={TrendingUp} onClick={() => onNavigate('analytics')} />
+      </div>
+
+      {/* ── Section explicative ───────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        {[
+          {
+            emoji: '🛰️',
+            title: 'Collecte OSINT automatique',
+            desc: 'La plateforme agrège en continu des indicateurs de compromission (IOCs) depuis 10+ sources publiques : abuse.ch, AlienVault OTX, CISA KEV, Spamhaus, NVD et d\'autres. Chaque collecte est journalisée et traçable.',
+            items: ['IPs malveillantes', 'Domaines suspects', 'Hashes de malwares', 'CVEs exploitées'],
+          },
+          {
+            emoji: '⚡',
+            title: 'Analyse & Scoring',
+            desc: 'Chaque IOC est normalisé, enrichi (GeoIP, DNS, WHOIS) puis scoré via un algorithme à 7 composantes : fiabilité de la source, corroboration, diversité, type, récence, tags malware et réputation externe.',
+            items: ['Score 0–100', 'Enrichissement GeoIP', 'Tags automatiques', 'MITRE ATT&CK'],
+          },
+          {
+            emoji: '🔗',
+            title: 'Corrélation & Alertes',
+            desc: 'Le moteur de corrélation regroupe les IOCs liés en clusters de menaces (Threats). Les IOCs haute confiance déclenchent des alertes visibles en temps réel sur ce dashboard.',
+            items: ['Clusters de menaces', 'Graphe de relations', 'Alertes temps réel', 'Export STIX/CSV'],
+          },
+        ].map(({ emoji, title, desc, items }) => (
+          <div key={title}
+               className="bg-white rounded-2xl border border-[#ede8e3] p-6 hover:border-[#c4a882] hover:shadow-md transition-all duration-200">
+            <div className="text-3xl mb-3">{emoji}</div>
+            <h3 className="text-sm font-bold text-gray-900 mb-2"
+                style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+              {title}
+            </h3>
+            <p className="text-xs text-gray-400 leading-relaxed mb-4">{desc}</p>
+            <div className="space-y-1.5">
+              {items.map(item => (
+                <div key={item} className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#c4a882] shrink-0" />
+                  <span className="text-xs text-[#8b7355] font-medium">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* ── Graphiques ───────────────────────────────────────── */}
