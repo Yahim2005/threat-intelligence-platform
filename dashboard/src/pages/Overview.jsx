@@ -8,7 +8,7 @@ import {
 import { ArrowUpRight, Download, TrendingUp, Shield, Database, Activity } from 'lucide-react'
 import { api } from '../api/client'
 import AlertsPanel from '../components/AlertsPanel'
-
+import ThreatGlobe from '../components/ThreatGlobe'
 const TYPE_COLORS = ['#8b7355','#c4a882','#d4b896','#a0845c','#6b5740','#e8d5b7','#bfa07a']
 const TLP_COLORS  = { CLEAR: '#9ca3af', GREEN: '#40916c', AMBER: '#f59e0b', AMBER_STRICT: '#f97316', RED: '#ef4444' }
 
@@ -199,6 +199,52 @@ export default function Overview({ onOpenDetail, onNavigate }) {
           <p className="text-sm text-gray-400 mt-0.5">
             {new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
+        </div>
+      </div>
+
+      {/* ── Globe 3D ─────────────────────────────────────────── */}
+      {/* ── Globe 3D ─────────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-[#ede8e3] p-6 flex flex-row items-center gap-6">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-[#8b7355] uppercase tracking-widest font-semibold mb-1">
+            Surveillance mondiale
+          </p>
+          <h2 className="text-xl font-bold text-gray-900 mb-2"
+              style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            Réseau de menaces actif
+          </h2>
+          <p className="text-sm text-gray-400 leading-relaxed">
+            La plateforme surveille en continu {stats.total_indicators?.toLocaleString()} indicateurs 
+            de compromission issus de {stats.total_sources} sources OSINT publiques.
+          </p>
+          <div className="flex items-center gap-4 mt-4">
+            <div>
+              <p className="text-2xl font-bold text-gray-900"
+                 style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                {stats.total_threats?.toLocaleString()}
+              </p>
+              <p className="text-xs text-gray-400">Clusters détectés</p>
+            </div>
+            <div className="w-px h-8 bg-[#ede8e3]" />
+            <div>
+              <p className="text-2xl font-bold text-gray-900"
+                 style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                {stats.total_sources}
+              </p>
+              <p className="text-xs text-gray-400">Sources actives</p>
+            </div>
+            <div className="w-px h-8 bg-[#ede8e3]" />
+            <div>
+              <p className="text-2xl font-bold text-gray-900"
+                 style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                {stats.avg_confidence ? Math.round(stats.avg_confidence) : '—'}
+              </p>
+              <p className="text-xs text-gray-400">Score moyen</p>
+            </div>
+          </div>
+        </div>
+        <div className="w-96 h-80 shrink-0">
+          <ThreatGlobe height={320} />
         </div>
       </div>
 
