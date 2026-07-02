@@ -172,13 +172,16 @@ export default function Overview({ onOpenDetail, onNavigate }) {
           style={{ height: '110px', objectPosition: 'center' }}
         />
         <div className="px-6 py-3 bg-[#faf8f5] border-t border-[#ede8e3] flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold text-[#8b7355] uppercase tracking-widest">
-              Threat Intelligence Platform
-            </p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Sécurité Numérique · Souveraineté Digitale
-            </p>
+          <div className="flex items-center gap-3">
+            <img src="/Logo-Antic.png" alt="ANTIC" className="h-9 w-auto object-contain" />
+            <div>
+              <p className="text-xs font-semibold text-[#8b7355] uppercase tracking-widest">
+                Threat Intelligence Platform
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Sécurité Numérique · Souveraineté Digitale
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-400 mr-1">Exporter :</span>

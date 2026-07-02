@@ -1,5 +1,5 @@
 // src/components/Navbar.jsx
-import { Shield, LayoutDashboard, AlertTriangle, Database, Activity, BarChart2, Radar } from 'lucide-react'
+import { Shield, LayoutDashboard, AlertTriangle, Database, Activity, BarChart2 } from 'lucide-react'
 
 const links = [
   { id: 'overview',   label: 'Overview',   icon: LayoutDashboard },
@@ -18,17 +18,15 @@ export default function Navbar({ current, onChange }) {
     >
 
       {/* ── Logo ─────────────────────────────────────────────── */}
-      <div className="px-5 py-6 border-b border-[#ede8e3]">
-        <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-lg" style={{ backgroundColor: '#c4a882' }}>
-            <Radar size={16} className="text-white" />
-          </div>
+      <div className="px-5 py-5 border-b border-[#ede8e3]">
+        <div className="flex items-center gap-3">
+          <img src="/Logo-Antic.png" alt="ANTIC" className="h-10 w-auto object-contain" />
           <div>
-            <p className="text-[#1f1712] text-xs font-bold tracking-widest uppercase"
+            <p className="text-xs font-bold tracking-widest uppercase text-[#8b7355]"
                style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               TIP
             </p>
-            <p className="text-xs" style={{ color: '#8b7355' }}>ANTIC · v1.0</p>
+            <p className="text-xs text-gray-400">v1.0.0</p>
           </div>
         </div>
       </div>
