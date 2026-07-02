@@ -37,6 +37,14 @@ body {
   transition: background-color 0.2s, color 0.2s;
 }
 
+h1, h2, h3, h4, h5, h6, .font-bold, .font-semibold {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+.font-mono, code, pre, td.font-mono, .font-mono * {
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
 /* ── Cards et surfaces ──────────────────────────────────────────── */
 .bg-white {
   background-color: var(--bg-card) !important;
@@ -109,9 +117,9 @@ thead, thead tr {
 }
 
 /* ── Sidebar — toujours dark, pas affectée par le thème ─────────── */
-aside {
+/*aside {
   background-color: #0f172a !important;
-}
+}*/
 
 /* ── Modal backdrop ─────────────────────────────────────────────── */
 .dark .bg-gray-900 {
