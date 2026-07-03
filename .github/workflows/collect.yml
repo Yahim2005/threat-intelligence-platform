@@ -1,0 +1,46 @@
+name: IOC Collection
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # toutes les 6 heures
+  workflow_dispatch:         # déclenchement manuel possible
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      ABUSECH_AUTH_KEY: ${{ secrets.ABUSECH_AUTH_KEY }}
+      OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+      TIP_API_KEY: ${{ secrets.TIP_API_KEY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run collectors
+        run: |
+          python -m collectors.urlhaus
+          python -m collectors.feodo
+          python -m collectors.threatfox
+          python -m collectors.spamhaus
+          python -m collectors.cisa_kev
+          python -m collectors.tor_exit
+          python -m collectors.otx
+          python -m collectors.openphish
+          python -m collectors.malwarebazaar
+
+      - name: Run correlation
+        run: python -m core.correlation
