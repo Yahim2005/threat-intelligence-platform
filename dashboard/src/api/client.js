@@ -1,8 +1,12 @@
 // src/api/client.js
-const BASE = '/api'
+const BASE = import.meta.env.VITE_API_BASE_URL
+  ? `${import.meta.env.VITE_API_BASE_URL}/api`
+  : '/api'
 
-async function get(path) {
-  const res = await fetch(`${BASE}${path}`)
+async function get(path, options = {}) {
+  const apiKey = import.meta.env.VITE_API_KEY || ''
+  const headers = apiKey ? { 'X-API-Key': apiKey } : {}
+  const res = await fetch(`${BASE}${path}`, { headers, ...options })
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`)
   return res.json()
 }
