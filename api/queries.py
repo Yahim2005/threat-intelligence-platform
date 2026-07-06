@@ -98,7 +98,7 @@ def get_threats(
         tag_counts: dict[str, int] = {}
         for ind in indicators:
             for tag in ind.tags:
-                tag_counts[tag.slug] = tag_counts.get(tag.slug, 0) + 1
+                tag_counts[tag.name] = tag_counts.get(tag.name, 0) + 1
         top_tags = sorted(tag_counts, key=lambda k: tag_counts[k], reverse=True)[:5]
 
         results.append({
