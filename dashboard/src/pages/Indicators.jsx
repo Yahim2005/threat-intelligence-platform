@@ -237,7 +237,7 @@ export default function Indicators({ onOpenDetail }) {
       </div>
 
       {/* ── Tableau ───────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-[#ede8e3] overflow-hidden">
+      <div className="bg-white rounded-2xl border border-[#ede8e3] overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[700px]">
           <thead>
             <tr className="border-b border-[#f5f0eb]">

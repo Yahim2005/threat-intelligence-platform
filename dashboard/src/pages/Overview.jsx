@@ -247,7 +247,15 @@ export default function Overview({ onOpenDetail, onNavigate }) {
           </div>
         </div>
         <div className="w-96 h-80 shrink-0">
+          {window.innerWidth >= 768 ? {isMobile ? (
+          <div className="flex items-center justify-center h-48 text-gray-400 text-sm italic">🌐 Globe 3D disponible sur desktop</div>
+        ) : (
           <ThreatGlobe height={300} />
+        )} : (
+  <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
+    🌐 Globe 3D disponible sur desktop
+  </div>
+)}
         </div>
       </div>
 
