@@ -105,6 +105,12 @@ function ExportButton({ format, label, exporting, onClick }) {
 }
 
 export default function Overview({ onOpenDetail, onNavigate }) {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
   const [stats,     setStats]     = useState(null)
   const [trends,    setTrends]    = useState([])
   const [loading,   setLoading]   = useState(true)
