@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 from dotenv import load_dotenv
-load_dotenv()
 
+from app.models import user
+load_dotenv()
+from uuid import uuid4
+
+from app.models.user import User
+from app.models.enums import UserRole
+from app.security import hash_password, verify_password, create_access_token
+from api.auth import get_current_user, require_admin
 import time
 from collections import defaultdict
 from typing import Optional
@@ -184,10 +191,24 @@ def _serialize_indicator(ind: Indicator) -> schemas.IndicatorResponse:
     )
 
 
+def _serialize_user(user: User) -> schemas.UserResponse:
+    return schemas.UserResponse(
+        id=str(user.id),
+        email=user.email,
+        phone=user.phone,
+        full_name=user.full_name,
+        role=user.role.value,
+        is_active=user.is_active,
+    )
+
+
 # ─── Routes : Observabilité ───────────────────────────────────────────────────
 
 @app.get("/health", tags=["Observability"])
-def health_check(db: Session = Depends(get_db)):
+def health_check(
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
     """
     Vérifie que l'API et la base de données sont opérationnelles.
     Répond 200 si tout va bien, 503 si la DB est inaccessible.
@@ -230,6 +251,7 @@ def submit_indicator(
     request: Request,
     body: schemas.IndicatorCreate,
     db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
 ):
     """
     Soumet manuellement un IOC dans la plateforme.
@@ -237,16 +259,92 @@ def submit_indicator(
     """
     try:
         result = queries.create_indicator_manual(db, body.model_dump())
-        # On retourne l'indicateur complet
         ind = queries.get_indicator_by_value(db, result["value"])
         if ind:
             return _serialize_indicator(ind)
         raise HTTPException(status_code=500, detail="Erreur lors de la création.")
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error("submit_indicator_failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+# ─── Routes : Auth ─────────────────────────────────────────────────────────────
+
+@app.post("/auth/register", response_model=schemas.TokenResponse, tags=["Auth"])
+@limiter.limit("10/minute")
+def register(
+    request: Request,
+    body: schemas.UserRegister,
+    db: Session = Depends(get_db),
+):
+    """
+    Crée un nouveau compte utilisateur (rôle 'user' par défaut).
+    """
+    existing = db.query(User).filter(User.email == body.email).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Cet email est déjà utilisé.")
+
+    if body.phone:
+        existing_phone = db.query(User).filter(User.phone == body.phone).first()
+        if existing_phone:
+            raise HTTPException(status_code=409, detail="Ce numéro est déjà utilisé.")
+
+    user = User(
+        id=uuid4(),
+        email=body.email,
+        phone=body.phone,
+        full_name=body.full_name,
+        hashed_password=hash_password(body.password),
+        role=UserRole.user,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token({"sub": str(user.id), "role": user.role.value})
+    return schemas.TokenResponse(
+        access_token=token,
+        user=_serialize_user(user),
+    )
+
+
+@app.post("/auth/login", response_model=schemas.TokenResponse, tags=["Auth"])
+@limiter.limit("10/minute")
+def login(
+    request: Request,
+    body: schemas.UserLogin,
+    db: Session = Depends(get_db),
+):
+    """
+    Connexion via email OU téléphone + mot de passe.
+    """
+    user = (
+        db.query(User)
+        .filter(
+            (User.email == body.identifier) | (User.phone == body.identifier)
+        )
+        .first()
+    )
+
+    if user is None or not verify_password(body.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Identifiants incorrects.")
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Compte désactivé.")
+
+    token = create_access_token({"sub": str(user.id), "role": user.role.value})
+    return schemas.TokenResponse(
+        access_token=token,
+        user=_serialize_user(user),
+    )
+
+
+@app.get("/auth/me", response_model=schemas.UserResponse, tags=["Auth"])
+def get_me(current_user: User = Depends(get_current_user)):
+    return _serialize_user(current_user)
 
 # ─── Routes : Indicators ──────────────────────────────────────────────────────
 

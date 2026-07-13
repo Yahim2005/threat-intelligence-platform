@@ -8,30 +8,40 @@ import Sources         from './pages/Sources'
 import Health          from './pages/Health'
 import Lookup          from './pages/Lookup'
 import IndicatorDetail from './pages/IndicatorDetail'
-import { Menu, Search } from 'lucide-react'
-import ThreatDetail from './pages/ThreatDetail'
-import Analytics from './pages/Analytics'
-import SubmitIOC from './components/SubmitIOC'
+import Login           from './pages/Login'
+import ThreatDetail    from './pages/ThreatDetail'
+import Analytics       from './pages/Analytics'
+import SubmitIOC       from './components/SubmitIOC'
+import SplashScreen    from './components/SplashScreen'
 import { useDarkMode } from './hooks/useDarkMode'
-import { Moon, Sun } from 'lucide-react'
+import { Menu, Search, LogOut, LogIn, Moon, Sun } from 'lucide-react'
+import { useAuth } from './context/AuthContext'
 
 export default function App() {
   const [page,        setPage]        = useState('overview')
   const [sidebarOpen, setSidebar]     = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [detailValue, setDetailValue] = useState(null)   // valeur IOC sélectionnée
-  const [threatId, setThreatId] = useState(null)
+  const [detailValue, setDetailValue] = useState(null)
+  const [threatId,    setThreatId]    = useState(null)
+  const [showSplash,  setShowSplash]  = useState(false)
   const [dark, setDark] = useDarkMode()
+  const { user, isAdmin, loading: authLoading, logout } = useAuth()
 
   function navigate(id) {
     setPage(id)
-    setDetailValue(null)   // reset du détail à chaque changement de page
+    setDetailValue(null)
     setSidebar(false)
   }
 
   function openDetail(value) {
     setDetailValue(value)
     setPage('detail')
+    setSidebar(false)
+  }
+
+  function openThreat(id) {
+    setThreatId(id)
+    setPage('threat-detail')
     setSidebar(false)
   }
 
@@ -42,42 +52,74 @@ export default function App() {
     }
   }
 
+  // Appelé par Login après un login réussi
+  function handleLoginSuccess() {
+    setShowSplash(true)
+  }
+
+  // Appelé par SplashScreen quand l'animation est terminée
+  function handleSplashDone() {
+    setShowSplash(false)
+    navigate('overview')
+  }
+
   function renderPage() {
-    if (page === 'detail')     return <IndicatorDetail value={detailValue} onBack={() => navigate('indicators')} />
-    if (page === 'lookup')     return <Lookup initialQuery={searchQuery} onOpenDetail={openDetail} />
-    if (page === 'overview')   return <Overview onOpenDetail={openDetail} onNavigate={navigate} />
-    if (page === 'indicators') return <Indicators onOpenDetail={openDetail} />
-    if (page === 'threats') return <Threats onOpenThreat={openThreat} />
-    if (page === 'sources')    return <Sources />
-    if (page === 'health')     return <Health />
-    if (page === 'analytics') return <Analytics />
+    if (page === 'detail')        return <IndicatorDetail value={detailValue} onBack={() => navigate('indicators')} />
+    if (page === 'lookup')        return <Lookup initialQuery={searchQuery} onOpenDetail={openDetail} />
+    if (page === 'overview')      return <Overview onOpenDetail={openDetail} onNavigate={navigate} />
+    if (page === 'indicators')    return <Indicators onOpenDetail={openDetail} />
+    if (page === 'threats')       return <Threats onOpenThreat={openThreat} />
+    if (page === 'sources')       return <Sources />
+    if (page === 'health')        return isAdmin ? <Health /> : <AccessDenied />
+    if (page === 'analytics')     return <Analytics />
     if (page === 'threat-detail') return <ThreatDetail threatId={threatId} onBack={() => navigate('threats')} onOpenDetail={openDetail} />
     return null
   }
 
-  function openThreat(id) {
-    setThreatId(id)
-    setPage('threat-detail')
-    setSidebar(false)
+  // Chargement initial de la session (restauration token)
+  if (authLoading) {
+    return <div className="min-h-screen bg-[#faf8f5]" />
+  }
+
+  // Cinématique post-login
+  if (showSplash) {
+    return <SplashScreen onDone={handleSplashDone} dataReady={true} />
+  }
+
+  // Page de login
+  if (!user || page === 'login') {
+    return <Login onSuccess={handleLoginSuccess} />
   }
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans">
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-20 lg:hidden" onClick={() => setSidebar(false)} />
+        <div
+          className="fixed inset-0 bg-black/40 z-20 lg:hidden"
+          onClick={() => setSidebar(false)}
+        />
       )}
+
+      {/* Sidebar */}
       <div className={`
         fixed inset-y-0 left-0 z-30 w-56 transform transition-transform duration-200
         lg:relative lg:translate-x-0 lg:flex lg:flex-col
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        <Navbar current={page} onChange={navigate} />
+        <Navbar current={page} onChange={navigate} isAdmin={isAdmin} />
       </div>
+
+      {/* Contenu principal */}
       <div className="flex-1 flex flex-col min-w-0">
         <header className="flex items-center gap-3 px-4 lg:px-8 py-3 bg-white border-b border-gray-100 shadow-sm sticky top-0 z-10">
-          <button onClick={() => setSidebar(true)} className="lg:hidden p-1.5 rounded-lg text-gray-600 hover:bg-gray-100">
+          <button
+            onClick={() => setSidebar(true)}
+            className="lg:hidden p-1.5 rounded-lg text-gray-600 hover:bg-gray-100"
+          >
             <Menu size={20} />
           </button>
+
+          {/* Barre de recherche */}
           <div className="relative flex-1 max-w-lg">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -86,9 +128,10 @@ export default function App() {
               onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={globalSearch}
               placeholder="Rechercher un IOC : IP, domaine, email, hash… (Entrée)"
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:bg-white transition-colors"
+              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#c4a882]/40 focus:bg-white transition-colors"
             />
           </div>
+
           <button
             onClick={() => { if (searchQuery.trim()) setPage('lookup') }}
             disabled={!searchQuery.trim()}
@@ -96,6 +139,8 @@ export default function App() {
           >
             <Search size={13} /> Lookup
           </button>
+
+          {/* Toggle dark mode */}
           <button
             onClick={() => setDark(d => !d)}
             className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors"
@@ -103,12 +148,50 @@ export default function App() {
           >
             {dark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
-          <SubmitIOC onSuccess={() => {}} />
+
+          {/* Bouton SubmitIOC réservé aux admins */}
+          {isAdmin && <SubmitIOC onSuccess={() => {}} />}
+
+          {/* Connexion / Déconnexion */}
+          {user ? (
+            <button
+              onClick={logout}
+              title={user.email}
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-500 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors"
+            >
+              <LogOut size={14} />
+              <span className="hidden sm:inline">Déconnexion</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('login')}
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#8b7355] text-white text-sm rounded-xl hover:bg-[#c4a882] transition-colors"
+            >
+              <LogIn size={14} /> Connexion
+            </button>
+          )}
         </header>
+
         <main className="flex-1 p-4 lg:p-8 overflow-auto">
           {renderPage()}
         </main>
       </div>
+    </div>
+  )
+}
+
+function AccessDenied() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center gap-2">
+      <p
+        className="text-lg font-semibold text-[#2c1810]"
+        style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+      >
+        Accès réservé aux administrateurs
+      </p>
+      <p className="text-sm text-gray-400">
+        Connectez-vous avec un compte admin pour consulter cette page.
+      </p>
     </div>
   )
 }

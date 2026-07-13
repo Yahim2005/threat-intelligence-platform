@@ -10,7 +10,9 @@ const links = [
   { id: 'health',     label: 'Health',     icon: Activity },
 ]
 
-export default function Navbar({ current, onChange }) {
+export default function Navbar({ current, onChange, isAdmin }) {
+  const visibleLinks = links.filter(({ id }) => id !== 'health' || isAdmin)
+
   return (
     <aside
       className="w-56 min-h-screen flex flex-col"
@@ -33,7 +35,7 @@ export default function Navbar({ current, onChange }) {
 
       {/* ── Navigation ───────────────────────────────────────── */}
       <nav className="flex-1 px-3 py-5 space-y-0.5">
-        {links.map(({ id, label, icon: Icon }) => {
+        {visibleLinks.map(({ id, label, icon: Icon }) => {
           const active = current === id || (id === 'indicators' && current === 'detail') || (id === 'threats' && current === 'threat-detail')
           return (
             <button

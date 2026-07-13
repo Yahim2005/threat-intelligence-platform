@@ -3,12 +3,47 @@ const BASE = import.meta.env.VITE_API_BASE_URL
   ? `${import.meta.env.VITE_API_BASE_URL}`
   : '/api'
 
-async function get(path, options = {}) {
+const TOKEN_STORAGE_KEY = 'tip-auth-token'
+
+// Le token JWT est gardé en mémoire + localStorage. AuthContext appelle
+// setAuthToken() au login/logout ; le client n'a pas besoin de React.
+let authToken = localStorage.getItem(TOKEN_STORAGE_KEY) || null
+
+export function setAuthToken(token) {
+  authToken = token
+  if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token)
+  else localStorage.removeItem(TOKEN_STORAGE_KEY)
+}
+
+export function getAuthToken() {
+  return authToken
+}
+
+function authHeaders() {
   const apiKey = import.meta.env.VITE_API_KEY || ''
   const headers = apiKey ? { 'X-API-Key': apiKey } : {}
-  const res = await fetch(`${BASE}${path}`, { headers, ...options })
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+  return headers
+}
+
+async function get(path, options = {}) {
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders(), ...options })
   if (!res.ok) throw new Error(`API error ${res.status}: ${path}`)
   return res.json()
+}
+
+async function send(method, path, body) {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) {
+    const message = data?.detail ?? `API error ${res.status}: ${path}`
+    throw new Error(typeof message === 'string' ? message : JSON.stringify(message))
+  }
+  return data
 }
 
 export const api = {
@@ -34,4 +69,8 @@ export const api = {
     })
     return get(`/indicators?${q.toString()}`)
   },
+  submitIndicator: (payload) => send('POST', '/indicators', payload),
+  register: (payload) => send('POST', '/auth/register', payload),
+  login:    (payload) => send('POST', '/auth/login', payload),
+  me:       ()        => get('/auth/me'),
 }

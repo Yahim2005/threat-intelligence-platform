@@ -58,3 +58,8 @@ class RunStatus(str, enum.Enum):
     success = "success"
     partial = "partial"   # certains records ont échoué, mais le run a terminé
     failed = "failed"     # le run entier a échoué (fetch ou parse a planté)
+
+
+class UserRole(str, enum.Enum):
+    admin = "admin"
+    user = "user"

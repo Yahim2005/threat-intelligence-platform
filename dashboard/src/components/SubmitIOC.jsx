@@ -1,6 +1,7 @@
 // src/components/SubmitIOC.jsx
 import { useState } from 'react'
 import { Plus, X, CheckCircle, AlertCircle } from 'lucide-react'
+import { api } from '../api/client'
 
 const TLP_OPTIONS = ['CLEAR', 'GREEN', 'AMBER', 'RED']
 
@@ -28,29 +29,15 @@ export default function SubmitIOC({ onSuccess }) {
       .filter(Boolean)
 
     try {
-      const res = await fetch('/api/indicators', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': import.meta.env.VITE_API_KEY ?? '',
-        },
-        body: JSON.stringify({
-          value: form.value.trim(),
-          tlp: form.tlp,
-          tags,
-          source_name: form.source_name || 'Manual Entry',
-        }),
+      const data = await api.submitIndicator({
+        value: form.value.trim(),
+        tlp: form.tlp,
+        tags,
+        source_name: form.source_name || 'Manual Entry',
       })
-
-      if (res.ok) {
-        const data = await res.json()
-        setResult({ success: true, message: `IOC créé : ${data.value} (${data.type}) — confidence ${data.confidence}` })
-        if (onSuccess) onSuccess(data)
-        setForm({ value: '', tlp: 'CLEAR', tags: '', source_name: 'Manual Entry' })
-      } else {
-        const err = await res.json()
-        setResult({ success: false, message: err.detail ?? 'Erreur inconnue' })
-      }
+      setResult({ success: true, message: `IOC créé : ${data.value} (${data.type}) — confidence ${data.confidence}` })
+      if (onSuccess) onSuccess(data)
+      setForm({ value: '', tlp: 'CLEAR', tags: '', source_name: 'Manual Entry' })
     } catch (e) {
       setResult({ success: false, message: e.message })
     } finally {

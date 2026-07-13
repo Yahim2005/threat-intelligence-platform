@@ -10,3 +10,4 @@ from app.models.tag import Tag, indicator_tags
 from app.models.collection_run import CollectionRun
 from app.models.reputation import ReputationCache
 from app.models.threat import Threat, threat_indicators
+from app.models.user import User

@@ -3,7 +3,7 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
 # ─── Indicator ───────────────────────────────────────────────────────────────
@@ -156,3 +156,34 @@ class CollectionRunResponse(BaseModel):
     items_errors: int
     error_message: Optional[str]
     duration_s: Optional[int]
+
+
+# ─── Auth ────────────────────────────────────────────────────────────────────
+
+class UserRegister(BaseModel):
+    email: EmailStr
+    phone: Optional[str] = None
+    full_name: Optional[str] = None
+    password: str
+
+
+class UserLogin(BaseModel):
+    identifier: str  # email OU téléphone
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    phone: Optional[str]
+    full_name: Optional[str]
+    role: str
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
