@@ -13,6 +13,7 @@ class IOCType(str, enum.Enum):
     cidr   = "cidr" 
     cve   = "cve"
     asn = "asn"
+    phone = "phone"
 
 
 class TLPLevel(str, enum.Enum):

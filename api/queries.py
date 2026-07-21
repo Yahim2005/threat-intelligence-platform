@@ -22,6 +22,7 @@ def get_indicators(
     tag_slug: Optional[str] = None,
     tlp: Optional[str] = None,
     search: Optional[str] = None,
+    cameroon: Optional[bool] = None,
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[Indicator], int]:
@@ -41,6 +42,8 @@ def get_indicators(
         q = q.join(Indicator.source).filter(Source.name == source_name)
     if tag_slug:
         q = q.join(Indicator.tags).filter(Tag.name == tag_slug)
+    if cameroon:
+        q = q.filter(Indicator.cameroon_relevance > 0)
     if search:
         q = q.filter(Indicator.value.ilike(f"%{search}%"))
 

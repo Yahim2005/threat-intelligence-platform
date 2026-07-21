@@ -44,6 +44,12 @@ SOURCES = [
         "tlp": TLPLevel.GREEN,
     },
     {
+        "name": "AlienVault OTX Africa",
+        "url": "https://otx.alienvault.com/api/v1/search/pulses",
+        "source_type": SourceType.api,
+        "tlp": TLPLevel.GREEN,
+    },
+    {
         "name": "OpenPhish",
         "url": "https://openphish.com/feed.txt",
         "source_type": SourceType.feed,

@@ -62,6 +62,12 @@ _SHA256_RE = re.compile(r"^[a-fA-F0-9]{64}$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _CVE_RE = re.compile(r"^CVE-\d{4}-\d{4,}$", re.IGNORECASE)
 _ASN_RE = re.compile(r"^AS\d+$", re.IGNORECASE)
+# Numéro de téléphone : E.164 international ou camerounais local
+_PHONE_RE = re.compile(
+    r"^\+\d{7,15}$"       # E.164 strict  : +237699123456
+    r"|^00\d{7,15}$"       # Avec 00       : 00237699123456
+    r"|^[26]\d{8}$"        # Local CM 9ch  : 699123456
+)
 _DOMAIN_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 
@@ -137,6 +143,8 @@ def detect_type(value: str) -> IOCType | None:
 
     if _EMAIL_RE.match(value):
         return IOCType.email
+    if _PHONE_RE.match(value):
+        return IOCType.phone
 
     if _is_url(value):
         return IOCType.url
@@ -186,6 +194,14 @@ def canonicalize(value: str, ioc_type: IOCType) -> str:
     if ioc_type == IOCType.cve:
         return value.upper()
 
+    if ioc_type == IOCType.phone:
+        # Normalise en E.164 : supprime espaces/tirets, ajoute + si absent
+        digits = re.sub(r"[\s\-\.\(\)]", "", value)
+        if digits.startswith("00"):
+            digits = "+" + digits[2:]
+        elif not digits.startswith("+"):
+            digits = "+237" + digits   # numéro local → préfixe Cameroun
+        return digits
     if ioc_type == IOCType.asn:
         return value.upper()
 

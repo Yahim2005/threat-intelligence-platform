@@ -5,12 +5,12 @@ import TLPBadge from '../components/TLPBadge'
 import StatusBadge from '../components/StatusBadge'
 import { ChevronLeft, ChevronRight, Search, X, SlidersHorizontal } from 'lucide-react'
 
-const TYPES    = ['ip', 'domain', 'url', 'md5', 'sha1', 'sha256', 'cve', 'email', 'cidr']
+const TYPES    = ['ip', 'domain', 'url', 'md5', 'sha1', 'sha256', 'cve', 'email', 'cidr', 'phone']
 const STATUSES = ['active', 'expired', 'whitelisted']
 const TLPS     = ['CLEAR', 'GREEN', 'AMBER', 'RED']
 
 const DEFAULT_FILTERS = {
-  type: '', status: 'active', tlp: '',
+  type: '', status: 'active', tlp: '', cameroon: false,
   confidence_min: '', source: '', tag: '', search: '',
 }
 
@@ -71,6 +71,7 @@ export default function Indicators({ onOpenDetail }) {
     if (f.source)         params.source         = f.source
     if (f.tag)            params.tag            = f.tag
     if (f.search)         params.search         = f.search
+    if (f.cameroon)       params.cameroon       = true
     api.indicators(params)
       .then(setData)
       .catch(console.error)
@@ -171,6 +172,17 @@ export default function Indicators({ onOpenDetail }) {
           </div>
         </div>
 
+        {/* Cameroun */}
+        <div>
+          <p className="text-xs font-medium text-[#8b7355] uppercase tracking-wider mb-2">Pertinence</p>
+          <div className="flex flex-wrap gap-2">
+            <Pill
+              label="🇨🇲 Cameroun uniquement"
+              active={draft.cameroon}
+              onClick={() => { const n = { ...draft, cameroon: !draft.cameroon }; setDraft(n); apply(n) }}
+            />
+          </div>
+        </div>
         {/* Filtres avancés (toggle) */}
         <div>
           <button

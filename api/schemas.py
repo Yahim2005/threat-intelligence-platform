@@ -22,6 +22,7 @@ class IndicatorResponse(BaseModel):
     attack_techniques: list[str]
     geoip: Optional[GeoIPData] = None
     score_breakdown: Optional[dict] = None
+    cameroon_relevance: int = 0
     model_config = {"from_attributes": True}
 
 

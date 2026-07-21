@@ -34,6 +34,7 @@ class Indicator(Base):
         SAEnum(TLPLevel), nullable=False, default=TLPLevel.CLEAR
     )
     confidence: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    cameroon_relevance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[IndicatorStatus] = mapped_column(
         SAEnum(IndicatorStatus), nullable=False, default=IndicatorStatus.active
     )

@@ -360,6 +360,7 @@ def list_indicators(
     tag: Optional[str] = Query(None, description="Slug du tag, ex: malware:emotet"),
     tlp: Optional[str] = Query(None, description="Niveau TLP : CLEAR, GREEN, AMBER, RED"),
     search: Optional[str] = Query(None, description="Recherche partielle dans la valeur de l'IOC"),
+    cameroon: Optional[bool] = Query(None, description="Filtrer les IOCs pertinents pour le Cameroun"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -374,6 +375,7 @@ def list_indicators(
         tag_slug=tag,
         tlp=tlp,
         search=search,
+        cameroon=cameroon,
         page=page,
         page_size=page_size,
     )
