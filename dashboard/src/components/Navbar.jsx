@@ -1,10 +1,11 @@
 // src/components/Navbar.jsx
-import { Shield, LayoutDashboard, AlertTriangle, Database, Activity, BarChart2 } from 'lucide-react'
+import { Shield, LayoutDashboard, AlertTriangle, Database, Activity, BarChart2, MapPin } from 'lucide-react'
 
 const links = [
   { id: 'overview',   label: 'Overview',   icon: LayoutDashboard },
   { id: 'indicators', label: 'Indicators', icon: AlertTriangle },
   { id: 'threats',    label: 'Threats',    icon: Shield },
+  { id: 'cameroon',   label: 'Cameroun',   icon: MapPin },
   { id: 'analytics',  label: 'Analytics',  icon: BarChart2 },
   { id: 'sources',    label: 'Sources',    icon: Database },
   { id: 'health',     label: 'Health',     icon: Activity },

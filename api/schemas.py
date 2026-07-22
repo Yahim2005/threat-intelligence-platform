@@ -188,3 +188,50 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+# ─── Cameroun ──────────────────────────────────────────────────────────────
+
+class CameroonOverviewResponse(BaseModel):
+    total_monitored_assets: int
+    domains_confirmed: int
+    domains_with_candidate: int
+    typosquat_confirmed: int
+    typosquat_potential: int
+    ct_findings: int
+    exposed_total: int
+    exposed_high_risk: int
+    exposed_medium_risk: int
+
+
+# ─── Exposed Assets / Monitored Assets ────────────────────────────────────────
+
+class ExposedAssetResponse(BaseModel):
+    id: str
+    ip_address: str
+    institution_name: Optional[str]
+    institution_acronym: Optional[str]
+    hostnames: list[str]
+    ports: list[int]
+    cpes: list[str]
+    vulns: list[str]
+    tags: list[str]
+    risk_level: str
+    first_seen: datetime
+    last_seen: datetime
+
+
+class ExposedAssetListResponse(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    items: list[ExposedAssetResponse]
+
+
+class MonitoredAssetResponse(BaseModel):
+    id: str
+    name: str
+    acronym: Optional[str]
+    category: str
+    domain: Optional[str]
+    domain_status: str
+    asn: Optional[int]

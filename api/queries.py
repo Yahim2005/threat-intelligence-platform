@@ -7,6 +7,9 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.models import Indicator, Source, Tag, Threat
+from app.models.monitored_asset import MonitoredAsset
+from app.models.exposed_asset import ExposedAsset
+from app.models.enums import DomainStatus
 from app.models.enums import TLPLevel
 
 
@@ -492,4 +495,207 @@ def get_collection_runs(session: Session, limit: int = 50) -> list[dict]:
             ),
         }
         for r in rows
+    ]
+
+# ─── Cameroun — vue d'ensemble ────────────────────────────────────────────────
+
+def get_cameroon_overview(session: Session) -> dict:
+    """Agrège les indicateurs clés de la surveillance Cameroun pour l'Overview
+    et la page dédiée : institutions suivies, typosquatting, certificats
+    suspects, surface d'attaque exposée.
+    """
+    total_assets = session.query(MonitoredAsset).filter_by(active=True).count()
+    domains_confirmed = (
+        session.query(MonitoredAsset)
+        .filter_by(active=True, domain_status=DomainStatus.confirmed)
+        .count()
+    )
+    domains_with_candidate = (
+        session.query(MonitoredAsset)
+        .filter(MonitoredAsset.active.is_(True), MonitoredAsset.domain.isnot(None))
+        .count()
+    )
+
+    def count_by_tag(tag_name: str) -> int:
+        return (
+            session.query(Indicator)
+            .join(Indicator.tags)
+            .filter(Tag.name == tag_name)
+            .count()
+        )
+
+    typosquat_confirmed = count_by_tag("typosquat:confirmed")
+    typosquat_potential = count_by_tag("typosquat:potential")
+    ct_findings = count_by_tag("ct-monitor")
+
+    exposed_total = session.query(ExposedAsset).count()
+    exposed_high_risk = session.query(ExposedAsset).filter_by(risk_level="high").count()
+    exposed_medium_risk = session.query(ExposedAsset).filter_by(risk_level="medium").count()
+
+    return {
+        "total_monitored_assets": total_assets,
+        "domains_confirmed": domains_confirmed,
+        "domains_with_candidate": domains_with_candidate,
+        "typosquat_confirmed": typosquat_confirmed,
+        "typosquat_potential": typosquat_potential,
+        "ct_findings": ct_findings,
+        "exposed_total": exposed_total,
+        "exposed_high_risk": exposed_high_risk,
+        "exposed_medium_risk": exposed_medium_risk,
+    }
+
+
+# ─── Exposed Assets (surface d'attaque) ───────────────────────────────────────
+
+def get_exposed_assets(
+    session: Session,
+    risk_level: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[list[dict], int]:
+    """Retourne les IPs exposées, avec le nom de l'institution associée."""
+    q = (
+        session.query(ExposedAsset, MonitoredAsset.name, MonitoredAsset.acronym)
+        .outerjoin(MonitoredAsset, ExposedAsset.monitored_asset_id == MonitoredAsset.id)
+    )
+    if risk_level:
+        q = q.filter(ExposedAsset.risk_level == risk_level)
+
+    from sqlalchemy import case
+
+    risk_order = case(
+        (ExposedAsset.risk_level == "high", 0),
+        (ExposedAsset.risk_level == "medium", 1),
+        else_=2,
+    )
+
+    total = q.count()
+    rows = (
+        q.order_by(risk_order, ExposedAsset.last_seen.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    items = []
+    for asset, asset_name, acronym in rows:
+        items.append({
+            "id": str(asset.id),
+            "ip_address": asset.ip_address,
+            "institution_name": asset_name,
+            "institution_acronym": acronym,
+            "hostnames": asset.hostnames or [],
+            "ports": asset.ports or [],
+            "cpes": asset.cpes or [],
+            "vulns": asset.vulns or [],
+            "tags": asset.tags or [],
+            "risk_level": asset.risk_level,
+            "first_seen": asset.first_seen,
+            "last_seen": asset.last_seen,
+        })
+    return items, total
+
+
+# ─── Monitored Assets (institutions surveillées) ──────────────────────────────
+
+def get_monitored_assets(
+    session: Session,
+    category: Optional[str] = None,
+) -> list[dict]:
+    """Retourne la liste des institutions surveillées (174 au total, pas de pagination)."""
+    q = session.query(MonitoredAsset).filter_by(active=True)
+    if category:
+        q = q.filter(MonitoredAsset.category == category)
+
+    assets = q.order_by(MonitoredAsset.category, MonitoredAsset.name).all()
+
+    return [
+        {
+            "id": str(a.id),
+            "name": a.name,
+            "acronym": a.acronym,
+            "category": a.category.value,
+            "domain": a.domain,
+            "domain_status": a.domain_status.value,
+            "asn": a.asn,
+        }
+        for a in assets
+    ]
+
+
+# ─── Exposed Assets (surface d'attaque) ───────────────────────────────────────
+
+def get_exposed_assets(
+    session: Session,
+    risk_level: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[list[dict], int]:
+    """Retourne les IPs exposées, avec le nom de l'institution associée."""
+    q = (
+        session.query(ExposedAsset, MonitoredAsset.name, MonitoredAsset.acronym)
+        .outerjoin(MonitoredAsset, ExposedAsset.monitored_asset_id == MonitoredAsset.id)
+    )
+    if risk_level:
+        q = q.filter(ExposedAsset.risk_level == risk_level)
+
+    from sqlalchemy import case
+
+    risk_order = case(
+        (ExposedAsset.risk_level == "high", 0),
+        (ExposedAsset.risk_level == "medium", 1),
+        else_=2,
+    )
+
+    total = q.count()
+    rows = (
+        q.order_by(risk_order, ExposedAsset.last_seen.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    items = []
+    for asset, asset_name, acronym in rows:
+        items.append({
+            "id": str(asset.id),
+            "ip_address": asset.ip_address,
+            "institution_name": asset_name,
+            "institution_acronym": acronym,
+            "hostnames": asset.hostnames or [],
+            "ports": asset.ports or [],
+            "cpes": asset.cpes or [],
+            "vulns": asset.vulns or [],
+            "tags": asset.tags or [],
+            "risk_level": asset.risk_level,
+            "first_seen": asset.first_seen,
+            "last_seen": asset.last_seen,
+        })
+    return items, total
+
+
+# ─── Monitored Assets (institutions surveillées) ──────────────────────────────
+
+def get_monitored_assets(
+    session: Session,
+    category: Optional[str] = None,
+) -> list[dict]:
+    """Retourne la liste des institutions surveillées (174 au total, pas de pagination)."""
+    q = session.query(MonitoredAsset).filter_by(active=True)
+    if category:
+        q = q.filter(MonitoredAsset.category == category)
+
+    assets = q.order_by(MonitoredAsset.category, MonitoredAsset.name).all()
+
+    return [
+        {
+            "id": str(a.id),
+            "name": a.name,
+            "acronym": a.acronym,
+            "category": a.category.value,
+            "domain": a.domain,
+            "domain_status": a.domain_status.value,
+            "asn": a.asn,
+        }
+        for a in assets
     ]

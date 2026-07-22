@@ -550,3 +550,44 @@ def get_trends(
 @limiter.limit("60/minute")
 def get_stats(request: Request, db: Session = Depends(get_db)):
     return schemas.StatsResponse(**queries.get_stats(db))
+
+# ─── Routes : Cameroun ─────────────────────────────────────────────────────────
+@app.get("/cameroon/overview", response_model=schemas.CameroonOverviewResponse, tags=["Cameroon"])
+@limiter.limit("60/minute")
+def get_cameroon_overview(request: Request, db: Session = Depends(get_db)):
+    """
+    Vue d'ensemble de la surveillance Cameroun : institutions suivies,
+    typosquatting détecté, certificats suspects, surface d'attaque exposée.
+    """
+    return schemas.CameroonOverviewResponse(**queries.get_cameroon_overview(db))
+
+
+@app.get("/exposed-assets", response_model=schemas.ExposedAssetListResponse, tags=["Cameroon"])
+@limiter.limit("60/minute")
+def list_exposed_assets(
+    request: Request,
+    risk_level: Optional[str] = Query(None, description="Filtrer par niveau : high, medium, info"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """
+    Retourne les IPs camerounaises avec des services exposés,
+    détectées via Shodan InternetDB. Trié par niveau de risque.
+    """
+    items, total = queries.get_exposed_assets(db, risk_level=risk_level, page=page, page_size=page_size)
+    return schemas.ExposedAssetListResponse(
+        total=total, page=page, page_size=page_size,
+        items=[schemas.ExposedAssetResponse(**i) for i in items],
+    )
+
+
+@app.get("/monitored-assets", response_model=list[schemas.MonitoredAssetResponse], tags=["Cameroon"])
+@limiter.limit("60/minute")
+def list_monitored_assets(
+    request: Request,
+    category: Optional[str] = Query(None, description="ministry, bank, telecom, public_company, institution"),
+    db: Session = Depends(get_db),
+):
+    """Retourne la liste des institutions camerounaises surveillées."""
+    return [schemas.MonitoredAssetResponse(**a) for a in queries.get_monitored_assets(db, category=category)]

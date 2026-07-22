@@ -50,6 +50,18 @@ SOURCES = [
         "tlp": TLPLevel.GREEN,
     },
     {
+        "name": "Typosquat Monitor (dnstwist)",
+        "url": "internal://dnstwist",
+        "source_type": SourceType.api,
+        "tlp": TLPLevel.CLEAR,
+    },
+    {
+        "name": "Certificate Transparency Monitor (crt.sh)",
+        "url": "https://crt.sh/",
+        "source_type": SourceType.api,
+        "tlp": TLPLevel.CLEAR,
+    },
+    {
         "name": "OpenPhish",
         "url": "https://openphish.com/feed.txt",
         "source_type": SourceType.feed,

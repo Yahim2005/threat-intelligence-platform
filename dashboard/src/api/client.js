@@ -48,6 +48,9 @@ async function send(method, path, body) {
 
 export const api = {
   stats:          ()           => get('/stats'),
+  cameroonOverview: ()         => get('/cameroon/overview'),
+  exposedAssets:  (params={})  => get(`/exposed-assets?${new URLSearchParams(params)}`),
+  monitoredAssets: (params={}) => get(`/monitored-assets?${new URLSearchParams(params)}`),
   related:        (value)      => get(`/indicators/${encodeURIComponent(value)}/related`),
   timeline:       (value, days = 30) => get(`/indicators/${encodeURIComponent(value)}/timeline?days=${days}`),
   alerts: (threshold = 75, hours = 168) => get(`/alerts?threshold=${threshold}&hours=${hours}`),

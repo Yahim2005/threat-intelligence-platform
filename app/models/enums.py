@@ -61,6 +61,18 @@ class RunStatus(str, enum.Enum):
     failed = "failed"     # le run entier a échoué (fetch ou parse a planté)
 
 
+class AssetCategory(str, enum.Enum):
+    telecom = "telecom"
+    ministry = "ministry"
+    bank = "bank"
+    public_company = "public_company"
+    institution = "institution"
+
+class DomainStatus(str, enum.Enum):
+    confirmed = "confirmed"
+    unconfirmed = "unconfirmed"
+    not_found = "not_found"
+
 class UserRole(str, enum.Enum):
     admin = "admin"
     user = "user"

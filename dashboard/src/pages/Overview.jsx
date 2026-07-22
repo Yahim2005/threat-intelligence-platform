@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell,
   LineChart, Line, CartesianGrid, Area, AreaChart
 } from 'recharts'
-import { ArrowUpRight, Download, TrendingUp, Shield, Database, Activity } from 'lucide-react'
+import { ArrowUpRight, Download, TrendingUp, Shield, Database, Activity, AlertTriangle, MapPin } from 'lucide-react'
 import { api } from '../api/client'
 import AlertsPanel from '../components/AlertsPanel'
 import ThreatGlobe from '../components/ThreatGlobe'
@@ -113,13 +113,14 @@ export default function Overview({ onOpenDetail, onNavigate }) {
   }, [])
   const [stats,     setStats]     = useState(null)
   const [trends,    setTrends]    = useState([])
+  const [cameroon,  setCameroon]  = useState(null)
   const [loading,   setLoading]   = useState(true)
   const [error,     setError]     = useState(null)
   const [exporting, setExporting] = useState(null)
 
   useEffect(() => {
-    Promise.all([api.stats(), api.trends(30)])
-      .then(([s, t]) => { setStats(s); setTrends(t) })
+    Promise.all([api.stats(), api.trends(30), api.cameroonOverview()])
+      .then(([s, t, c]) => { setStats(s); setTrends(t); setCameroon(c) })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [])
@@ -197,6 +198,66 @@ export default function Overview({ onOpenDetail, onNavigate }) {
           </div>
         </div>
       </div>
+
+      {/* ── Cameroun : surveillance nationale ──────────────────── */}
+      {cameroon && (
+        <div
+          onClick={() => onNavigate('cameroon')}
+          className="rounded-2xl border border-[#2c1810]/10 overflow-hidden cursor-pointer
+                     hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+          style={{ background: 'linear-gradient(135deg, #1a3d2e 0%, #2c1810 60%, #7a1f1f 100%)' }}
+        >
+          <div className="px-6 py-5 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-white/10 shrink-0">
+                <MapPin size={20} className="text-[#e8d5b7]" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-[#e8d5b7] uppercase tracking-widest mb-1">
+                  🇨🇲 Surveillance Cameroun
+                </p>
+                <h2 className="text-lg font-bold text-white"
+                    style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                  {cameroon.total_monitored_assets} institutions surveillées
+                </h2>
+                <p className="text-xs text-white/50 mt-0.5">
+                  Ministères, banques, opérateurs télécom et sociétés publiques
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-6">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-white" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                  {cameroon.typosquat_confirmed}
+                </p>
+                <p className="text-[10px] text-white/50 uppercase tracking-wider">Typosquats confirmés</p>
+              </div>
+              <div className="w-px h-10 bg-white/15" />
+              <div className="text-center">
+                <p className="text-2xl font-bold text-white" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                  {cameroon.exposed_high_risk}
+                </p>
+                <p className="text-[10px] text-white/50 uppercase tracking-wider">IPs à haut risque</p>
+              </div>
+              <div className="w-px h-10 bg-white/15" />
+              <div className="text-center flex flex-col items-center">
+                <div className="flex items-center gap-1">
+                  <AlertTriangle size={14} className="text-[#e8b896]" />
+                  <p className="text-2xl font-bold text-white" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+                    {cameroon.typosquat_confirmed + cameroon.typosquat_potential + cameroon.exposed_high_risk + cameroon.ct_findings}
+                  </p>
+                </div>
+                <p className="text-[10px] text-white/50 uppercase tracking-wider">Signaux actifs</p>
+              </div>
+              <button className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-xl
+                                 bg-white/10 text-white hover:bg-white/20 transition-all shrink-0">
+                Voir le détail <ArrowUpRight size={13} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Titre ────────────────────────────────────────────── */}
       <div className="flex items-end justify-between">
