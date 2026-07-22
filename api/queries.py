@@ -550,6 +550,7 @@ def get_cameroon_overview(session: Session) -> dict:
 def get_exposed_assets(
     session: Session,
     risk_level: Optional[str] = None,
+    monitored_asset_id: Optional[str] = None,
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[dict], int]:
@@ -560,84 +561,8 @@ def get_exposed_assets(
     )
     if risk_level:
         q = q.filter(ExposedAsset.risk_level == risk_level)
-
-    from sqlalchemy import case
-
-    risk_order = case(
-        (ExposedAsset.risk_level == "high", 0),
-        (ExposedAsset.risk_level == "medium", 1),
-        else_=2,
-    )
-
-    total = q.count()
-    rows = (
-        q.order_by(risk_order, ExposedAsset.last_seen.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
-
-    items = []
-    for asset, asset_name, acronym in rows:
-        items.append({
-            "id": str(asset.id),
-            "ip_address": asset.ip_address,
-            "institution_name": asset_name,
-            "institution_acronym": acronym,
-            "hostnames": asset.hostnames or [],
-            "ports": asset.ports or [],
-            "cpes": asset.cpes or [],
-            "vulns": asset.vulns or [],
-            "tags": asset.tags or [],
-            "risk_level": asset.risk_level,
-            "first_seen": asset.first_seen,
-            "last_seen": asset.last_seen,
-        })
-    return items, total
-
-
-# ─── Monitored Assets (institutions surveillées) ──────────────────────────────
-
-def get_monitored_assets(
-    session: Session,
-    category: Optional[str] = None,
-) -> list[dict]:
-    """Retourne la liste des institutions surveillées (174 au total, pas de pagination)."""
-    q = session.query(MonitoredAsset).filter_by(active=True)
-    if category:
-        q = q.filter(MonitoredAsset.category == category)
-
-    assets = q.order_by(MonitoredAsset.category, MonitoredAsset.name).all()
-
-    return [
-        {
-            "id": str(a.id),
-            "name": a.name,
-            "acronym": a.acronym,
-            "category": a.category.value,
-            "domain": a.domain,
-            "domain_status": a.domain_status.value,
-            "asn": a.asn,
-        }
-        for a in assets
-    ]
-
-
-# ─── Exposed Assets (surface d'attaque) ───────────────────────────────────────
-
-def get_exposed_assets(
-    session: Session,
-    risk_level: Optional[str] = None,
-    page: int = 1,
-    page_size: int = 50,
-) -> tuple[list[dict], int]:
-    """Retourne les IPs exposées, avec le nom de l'institution associée."""
-    q = (
-        session.query(ExposedAsset, MonitoredAsset.name, MonitoredAsset.acronym)
-        .outerjoin(MonitoredAsset, ExposedAsset.monitored_asset_id == MonitoredAsset.id)
-    )
-    if risk_level:
-        q = q.filter(ExposedAsset.risk_level == risk_level)
+    if monitored_asset_id:
+        q = q.filter(ExposedAsset.monitored_asset_id == monitored_asset_id)
 
     from sqlalchemy import case
 

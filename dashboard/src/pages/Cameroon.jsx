@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import {
   MapPin, Shield, AlertTriangle, Building2, Radio, Landmark,
-  ChevronRight, ExternalLink, Server, Globe2, CheckCircle2, HelpCircle
+  ChevronRight, ExternalLink, Server, Globe2, CheckCircle2, HelpCircle,
+  ChevronDown, ChevronUp, X
 } from 'lucide-react'
 import { api } from '../api/client'
 
@@ -89,8 +90,17 @@ function DomainCard({ item, onOpenDetail }) {
   )
 }
 
+const CVE_PREVIEW_LIMIT = 15
+
 function ExposedRow({ asset }) {
   const risk = RISK_STYLES[asset.risk_level] || RISK_STYLES.info
+  const [expanded, setExpanded] = useState(false)
+  const [showAllVulns, setShowAllVulns] = useState(false)
+  const vulns = asset.vulns || []
+  const hasVulns = vulns.length > 0
+  const visibleVulns = showAllVulns ? vulns : vulns.slice(0, CVE_PREVIEW_LIMIT)
+  const hiddenCount = vulns.length - visibleVulns.length
+
   return (
     <div className="bg-white rounded-xl border border-[#ede8e3] p-4">
       <div className="flex items-center justify-between gap-3 mb-2">
@@ -103,26 +113,57 @@ function ExposedRow({ asset }) {
         </div>
         <span className="text-xs text-gray-400 shrink-0">{asset.institution_name || 'Institution inconnue'}</span>
       </div>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1.5 items-center">
         {(asset.ports || []).slice(0, 8).map(p => (
           <span key={p} className="text-[10px] font-mono px-1.5 py-0.5 bg-[#f5f0eb] text-[#8b7355] rounded">
             :{p}
           </span>
         ))}
-        {asset.vulns?.length > 0 && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-red-50 text-red-500 rounded font-medium">
-            {asset.vulns.length} CVE{asset.vulns.length > 1 ? 's' : ''}
-          </span>
+        {hasVulns && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-red-50 text-red-500 rounded font-medium hover:bg-red-100 transition-colors"
+          >
+            {vulns.length} CVE{vulns.length > 1 ? 's' : ''}
+            {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+          </button>
         )}
       </div>
+      {hasVulns && expanded && (
+        <div className="mt-3 pt-3 border-t border-[#ede8e3] flex flex-wrap gap-1.5">
+          {visibleVulns.map(cve => (
+            <a
+              key={cve}
+              href={`https://nvd.nist.gov/vuln/detail/${cve}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] font-mono bg-red-50 text-red-500 rounded px-1.5 py-0.5 hover:underline"
+            >
+              {cve}
+            </a>
+          ))}
+          {!showAllVulns && hiddenCount > 0 && (
+            <button
+              onClick={() => setShowAllVulns(true)}
+              className="text-[10px] font-mono px-1.5 py-0.5 bg-[#f5f0eb] text-[#8b7355] rounded hover:bg-[#ede8e3]"
+            >
+              +{hiddenCount} autres
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-function InstitutionRow({ asset }) {
+function InstitutionRow({ asset, onClick }) {
   const Icon = CATEGORY_ICONS[asset.category] || Shield
   return (
-    <div className="bg-white rounded-xl border border-[#ede8e3] p-4 flex items-center justify-between gap-3">
+    <div
+      onClick={onClick}
+      className="bg-white rounded-xl border border-[#ede8e3] p-4 flex items-center justify-between gap-3
+                 cursor-pointer hover:border-[#c4a882] hover:shadow-sm transition-all"
+    >
       <div className="flex items-center gap-3 min-w-0">
         <div className="p-2 rounded-lg bg-[#faf8f5] shrink-0">
           <Icon size={14} className="text-[#8b7355]" />
@@ -159,6 +200,7 @@ export default function Cameroon({ onOpenDetail }) {
 
   const [exposedAssets, setExposedAssets] = useState([])
   const [riskFilter, setRiskFilter] = useState('')
+  const [selectedInstitution, setSelectedInstitution] = useState(null)
 
   const [institutions, setInstitutions] = useState([])
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -183,9 +225,11 @@ export default function Cameroon({ onOpenDetail }) {
 
   useEffect(() => {
     if (tab !== 'exposed') return
-    const params = riskFilter ? { risk_level: riskFilter, page_size: 100 } : { page_size: 100 }
+    const params = { page_size: 100 }
+    if (riskFilter) params.risk_level = riskFilter
+    if (selectedInstitution) params.monitored_asset_id = selectedInstitution.id
     api.exposedAssets(params).then(d => setExposedAssets(d.items)).catch(console.error)
-  }, [tab, riskFilter])
+  }, [tab, riskFilter, selectedInstitution])
 
   useEffect(() => {
     if (tab !== 'institutions') return
@@ -329,6 +373,20 @@ export default function Cameroon({ onOpenDetail }) {
 
       {tab === 'exposed' && (
         <div className="space-y-4">
+          {selectedInstitution && (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#8b7355] text-white">
+                Filtré : {selectedInstitution.name}
+                <button
+                  onClick={() => setSelectedInstitution(null)}
+                  className="hover:opacity-70 transition-opacity"
+                  aria-label="Retirer le filtre institution"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            </div>
+          )}
           <div className="flex gap-2">
             {[{ v: '', l: 'Tous' }, { v: 'high', l: 'Haut risque' }, { v: 'medium', l: 'Risque moyen' }, { v: 'info', l: 'Info' }].map(({ v, l }) => (
               <button
@@ -379,7 +437,16 @@ export default function Cameroon({ onOpenDetail }) {
             ))}
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
-            {institutions.map(a => <InstitutionRow key={a.id} asset={a} />)}
+            {institutions.map(a => (
+              <InstitutionRow
+                key={a.id}
+                asset={a}
+                onClick={() => {
+                  setSelectedInstitution({ id: a.id, name: a.name })
+                  setTab('exposed')
+                }}
+              />
+            ))}
           </div>
         </div>
       )}

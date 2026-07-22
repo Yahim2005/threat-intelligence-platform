@@ -11,6 +11,7 @@ import IndicatorDetail from './pages/IndicatorDetail'
 import Login           from './pages/Login'
 import ThreatDetail    from './pages/ThreatDetail'
 import Analytics       from './pages/Analytics'
+import Cameroon        from './pages/Cameroon'
 import SubmitIOC       from './components/SubmitIOC'
 import SplashScreen    from './components/SplashScreen'
 import { useDarkMode } from './hooks/useDarkMode'
@@ -72,6 +73,7 @@ export default function App() {
     if (page === 'sources')       return <Sources />
     if (page === 'health')        return isAdmin ? <Health /> : <AccessDenied />
     if (page === 'analytics')     return <Analytics />
+    if (page === 'cameroon')      return <Cameroon onOpenDetail={openDetail} onOpenThreat={openThreat} />
     if (page === 'threat-detail') return <ThreatDetail threatId={threatId} onBack={() => navigate('threats')} onOpenDetail={openDetail} />
     return null
   }

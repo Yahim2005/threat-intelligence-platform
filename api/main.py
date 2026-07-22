@@ -567,6 +567,7 @@ def get_cameroon_overview(request: Request, db: Session = Depends(get_db)):
 def list_exposed_assets(
     request: Request,
     risk_level: Optional[str] = Query(None, description="Filtrer par niveau : high, medium, info"),
+    monitored_asset_id: Optional[str] = Query(None, description="Filtrer par institution surveillée (UUID)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -575,7 +576,9 @@ def list_exposed_assets(
     Retourne les IPs camerounaises avec des services exposés,
     détectées via Shodan InternetDB. Trié par niveau de risque.
     """
-    items, total = queries.get_exposed_assets(db, risk_level=risk_level, page=page, page_size=page_size)
+    items, total = queries.get_exposed_assets(
+        db, risk_level=risk_level, monitored_asset_id=monitored_asset_id, page=page, page_size=page_size
+    )
     return schemas.ExposedAssetListResponse(
         total=total, page=page, page_size=page_size,
         items=[schemas.ExposedAssetResponse(**i) for i in items],

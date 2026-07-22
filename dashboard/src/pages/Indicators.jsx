@@ -183,6 +183,27 @@ export default function Indicators({ onOpenDetail }) {
             />
           </div>
         </div>
+        {/* Typosquatting */}
+        <div>
+          <p className="text-xs font-medium text-[#8b7355] uppercase tracking-wider mb-2">Typosquatting</p>
+          <div className="flex flex-wrap gap-2">
+            <Pill
+              label="Tous"
+              active={draft.tag === ''}
+              onClick={() => togglePill('tag', '')}
+            />
+            <Pill
+              label="Confirmé"
+              active={draft.tag === 'typosquat:confirmed'}
+              onClick={() => togglePill('tag', 'typosquat:confirmed')}
+            />
+            <Pill
+              label="Potentiel"
+              active={draft.tag === 'typosquat:potential'}
+              onClick={() => togglePill('tag', 'typosquat:potential')}
+            />
+          </div>
+        </div>
         {/* Filtres avancés (toggle) */}
         <div>
           <button
