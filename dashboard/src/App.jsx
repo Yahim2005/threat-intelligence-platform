@@ -12,10 +12,14 @@ import Login           from './pages/Login'
 import ThreatDetail    from './pages/ThreatDetail'
 import Analytics       from './pages/Analytics'
 import Cameroon        from './pages/Cameroon'
+import CameroonInstitutionsRank from './pages/CameroonInstitutionsRank'
+import CameroonTyposquat        from './pages/CameroonTyposquat'
+import CameroonExposed          from './pages/CameroonExposed'
+import CameroonInstitutions     from './pages/CameroonInstitutions'
 import SubmitIOC       from './components/SubmitIOC'
 import SplashScreen    from './components/SplashScreen'
 import { useDarkMode } from './hooks/useDarkMode'
-import { Menu, Search, LogOut, LogIn, Moon, Sun } from 'lucide-react'
+import { Menu, Search, LogOut, LogIn, Moon, Sun, MapPin } from 'lucide-react'
 import { useAuth } from './context/AuthContext'
 
 export default function App() {
@@ -73,7 +77,11 @@ export default function App() {
     if (page === 'sources')       return <Sources />
     if (page === 'health')        return isAdmin ? <Health /> : <AccessDenied />
     if (page === 'analytics')     return <Analytics />
-    if (page === 'cameroon')      return <Cameroon onOpenDetail={openDetail} onOpenThreat={openThreat} />
+    if (page === 'cameroon')      return <Cameroon onOpenDetail={openDetail} onNavigate={navigate} />
+    if (page === 'cameroon-institutions-rank') return <CameroonInstitutionsRank onBack={() => navigate('cameroon')} />
+    if (page === 'cameroon-typosquat')         return <CameroonTyposquat onBack={() => navigate('cameroon')} onOpenDetail={openDetail} />
+    if (page === 'cameroon-exposed')           return <CameroonExposed onBack={() => navigate('cameroon')} />
+    if (page === 'cameroon-institutions')      return <CameroonInstitutions onBack={() => navigate('cameroon')} onNavigate={navigate} />
     if (page === 'threat-detail') return <ThreatDetail threatId={threatId} onBack={() => navigate('threats')} onOpenDetail={openDetail} />
     return null
   }
@@ -142,36 +150,49 @@ export default function App() {
             <Search size={13} /> Lookup
           </button>
 
-          {/* Toggle dark mode */}
-          <button
-            onClick={() => setDark(d => !d)}
-            className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors"
-            title={dark ? 'Mode clair' : 'Mode sombre'}
-          >
-            {dark ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-
-          {/* Bouton SubmitIOC réservé aux admins */}
-          {isAdmin && <SubmitIOC onSuccess={() => {}} />}
-
-          {/* Connexion / Déconnexion */}
-          {user ? (
+          {/* Groupe droit : toujours plaqué à droite grâce à ml-auto,
+              indépendamment de la largeur de la barre de recherche */}
+          <div className="flex items-center gap-2 ml-auto">
+            {/* Accès rapide Surveillance nationale */}
             <button
-              onClick={logout}
-              title={user.email}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-500 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors"
+              onClick={() => navigate('cameroon')}
+              className="hidden md:flex items-center gap-1.5 px-4 py-2 bg-[#2c1810] text-[#e8d5b7] text-sm rounded-xl hover:bg-[#3d2418] transition-colors"
+              title="Surveillance nationale"
             >
-              <LogOut size={14} />
-              <span className="hidden sm:inline">Déconnexion</span>
+              <MapPin size={14} /> Surveillance nationale
             </button>
-          ) : (
+
+            {/* Toggle dark mode */}
             <button
-              onClick={() => navigate('login')}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#8b7355] text-white text-sm rounded-xl hover:bg-[#c4a882] transition-colors"
+              onClick={() => setDark(d => !d)}
+              className="p-2 rounded-xl text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors"
+              title={dark ? 'Mode clair' : 'Mode sombre'}
             >
-              <LogIn size={14} /> Connexion
+              {dark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-          )}
+
+            {/* Bouton SubmitIOC réservé aux admins */}
+            {isAdmin && <SubmitIOC onSuccess={() => {}} />}
+
+            {/* Connexion / Déconnexion */}
+            {user ? (
+              <button
+                onClick={logout}
+                title={user.email}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-500 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors"
+              >
+                <LogOut size={14} />
+                <span className="hidden sm:inline">Déconnexion</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate('login')}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#8b7355] text-white text-sm rounded-xl hover:bg-[#c4a882] transition-colors"
+              >
+                <LogIn size={14} /> Connexion
+              </button>
+            )}
+          </div>
         </header>
 
         <main className="flex-1 p-4 lg:p-8 overflow-auto">

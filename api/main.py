@@ -361,6 +361,7 @@ def list_indicators(
     tlp: Optional[str] = Query(None, description="Niveau TLP : CLEAR, GREEN, AMBER, RED"),
     search: Optional[str] = Query(None, description="Recherche partielle dans la valeur de l'IOC"),
     cameroon: Optional[bool] = Query(None, description="Filtrer les IOCs pertinents pour le Cameroun"),
+    cameroon_relevance_min: Optional[int] = Query(None, ge=0, le=10, description="Seuil minimum de pertinence Cameroun"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -376,6 +377,7 @@ def list_indicators(
         tlp=tlp,
         search=search,
         cameroon=cameroon,
+        cameroon_relevance_min=cameroon_relevance_min,
         page=page,
         page_size=page_size,
     )
@@ -477,13 +479,14 @@ def get_alerts(
     threshold: int = Query(75, ge=0, le=100, description="Score minimum de confiance"),
     hours: int = Query(24, ge=1, le=720, description="Fenêtre temporelle en heures (max 30 jours)"),
     limit: int = Query(20, ge=1, le=100),
+    cameroon_only: bool = Query(False, description="Ne garder que les IOCs pertinents pour le Cameroun"),
     db: Session = Depends(get_db),
 ):
     """
     Retourne les IOCs actifs haute confiance vus récemment.
     Utilisé par le panneau d'alertes du dashboard.
     """
-    results = queries.get_alerts(db, threshold=threshold, hours=hours, limit=limit)
+    results = queries.get_alerts(db, threshold=threshold, hours=hours, limit=limit, cameroon_only=cameroon_only)
     return [schemas.AlertResponse(**r) for r in results]
 
 # ─── Routes : Analytics avancée ───────────────────────────────────────────────
@@ -594,3 +597,85 @@ def list_monitored_assets(
 ):
     """Retourne la liste des institutions camerounaises surveillées."""
     return [schemas.MonitoredAssetResponse(**a) for a in queries.get_monitored_assets(db, category=category)]
+
+
+@app.post("/cameroon/report-false-positive", response_model=schemas.FalsePositiveResponse, tags=["Cameroon"])
+@limiter.limit("30/minute")
+def report_false_positive(
+    request: Request,
+    body: schemas.FalsePositiveRequest,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """
+    Marque un IOC typosquat/CT comme faux positif : whitelist + retrait des
+    tags trompeurs + option d'ajouter le domaine comme alias connu pour
+    qu'il soit automatiquement exclu des futurs scans.
+    """
+    try:
+        result = queries.report_false_positive(
+            db, indicator_id=body.indicator_id, monitored_asset_id=body.monitored_asset_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return schemas.FalsePositiveResponse(**result)
+
+
+@app.get("/cameroon/timeline", response_model=list[schemas.CameroonTimelinePointResponse], tags=["Cameroon"])
+@limiter.limit("60/minute")
+def get_cameroon_timeline_route(
+    request: Request,
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+):
+    """Nouvelles détections Cameroun par jour — typosquatting, CT, surface d'attaque."""
+    results = queries.get_cameroon_timeline(db, days=days)
+    return [schemas.CameroonTimelinePointResponse(**r) for r in results]
+
+
+@app.get("/cameroon/institutions/ranked", response_model=list[schemas.InstitutionRiskResponse], tags=["Cameroon"])
+@limiter.limit("60/minute")
+def get_institutions_ranked_route(request: Request, db: Session = Depends(get_db)):
+    """Classe les institutions camerounaises par score de risque composite."""
+    results = queries.get_institutions_ranked(db)
+    return [schemas.InstitutionRiskResponse(**r) for r in results]
+
+
+@app.get("/cameroon/vuln-severity", response_model=schemas.VulnSeverityResponse, tags=["Cameroon"])
+@limiter.limit("60/minute")
+def get_vuln_severity_route(request: Request, db: Session = Depends(get_db)):
+    """Répartition de sévérité des CVE trouvées sur la surface d'attaque exposée."""
+    return schemas.VulnSeverityResponse(**queries.get_vuln_severity_breakdown(db))
+
+
+@app.post("/monitored-assets", response_model=schemas.MonitoredAssetResponse, tags=["Cameroon"])
+@limiter.limit("30/minute")
+def create_monitored_asset_route(
+    request: Request,
+    body: schemas.MonitoredAssetCreate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Crée une nouvelle institution à surveiller."""
+    try:
+        result = queries.create_monitored_asset(db, body.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    return schemas.MonitoredAssetResponse(**result)
+
+
+@app.patch("/monitored-assets/{asset_id}", response_model=schemas.MonitoredAssetResponse, tags=["Cameroon"])
+@limiter.limit("30/minute")
+def update_monitored_asset_route(
+    asset_id: str,
+    request: Request,
+    body: schemas.MonitoredAssetUpdate,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Met à jour une institution surveillée (champs partiels)."""
+    try:
+        result = queries.update_monitored_asset(db, asset_id, body.model_dump(exclude_unset=True))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return schemas.MonitoredAssetResponse(**result)

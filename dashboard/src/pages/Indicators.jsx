@@ -10,7 +10,7 @@ const STATUSES = ['active', 'expired', 'whitelisted']
 const TLPS     = ['CLEAR', 'GREEN', 'AMBER', 'RED']
 
 const DEFAULT_FILTERS = {
-  type: '', status: 'active', tlp: '', cameroon: false,
+  type: '', status: 'active', tlp: '', cameroon: false, cameroon_relevance_min: '',
   confidence_min: '', source: '', tag: '', search: '',
 }
 
@@ -72,6 +72,7 @@ export default function Indicators({ onOpenDetail }) {
     if (f.tag)            params.tag            = f.tag
     if (f.search)         params.search         = f.search
     if (f.cameroon)       params.cameroon       = true
+    if (f.cameroon_relevance_min !== '') params.cameroon_relevance_min = f.cameroon_relevance_min
     api.indicators(params)
       .then(setData)
       .catch(console.error)
@@ -172,14 +173,24 @@ export default function Indicators({ onOpenDetail }) {
           </div>
         </div>
 
-        {/* Cameroun */}
+        {/* Pertinence Cameroun */}
         <div>
-          <p className="text-xs font-medium text-[#8b7355] uppercase tracking-wider mb-2">Pertinence</p>
+          <p className="text-xs font-medium text-[#8b7355] uppercase tracking-wider mb-2">Pertinence Cameroun</p>
           <div className="flex flex-wrap gap-2">
             <Pill
-              label="🇨🇲 Cameroun uniquement"
+              label="Cameroun uniquement"
               active={draft.cameroon}
               onClick={() => { const n = { ...draft, cameroon: !draft.cameroon }; setDraft(n); apply(n) }}
+            />
+            <Pill
+              label="Score ≥ 3 (modéré+)"
+              active={draft.cameroon_relevance_min === 3}
+              onClick={() => { const v = draft.cameroon_relevance_min === 3 ? '' : 3; const n = { ...draft, cameroon_relevance_min: v }; setDraft(n); apply(n) }}
+            />
+            <Pill
+              label="Score ≥ 6 (élevé)"
+              active={draft.cameroon_relevance_min === 6}
+              onClick={() => { const v = draft.cameroon_relevance_min === 6 ? '' : 6; const n = { ...draft, cameroon_relevance_min: v }; setDraft(n); apply(n) }}
             />
           </div>
         </div>

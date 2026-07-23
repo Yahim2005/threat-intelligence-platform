@@ -17,18 +17,23 @@ function TypePill({ type }) {
   )
 }
 
-export default function AlertsPanel({ onOpenDetail }) {
+export default function AlertsPanel({ onOpenDetail, cameroonOnly = false }) {
   const [alerts,  setAlerts]  = useState([])
   const [loading, setLoading] = useState(true)
   const [refresh, setRefresh] = useState(0)
 
   useEffect(() => {
     setLoading(true)
-    api.alerts(75, 168)
+    // Les IOCs Cameroun fraîchement découverts (typosquatting) démarrent
+    // avec un score de confidence générique bas (pas encore de corroboration
+    // historique) — la pertinence Cameroun + la fraîcheur sont le vrai signal
+    // ici, pas le score de confidence générique. On ne filtre donc pas dessus.
+    const threshold = cameroonOnly ? 0 : 75
+    api.alerts(threshold, 168, cameroonOnly)
       .then(setAlerts)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [refresh])
+  }, [refresh, cameroonOnly])
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
@@ -36,7 +41,9 @@ export default function AlertsPanel({ onOpenDetail }) {
       <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <AlertTriangle size={15} className="text-red-500" />
-          <h2 className="text-sm font-semibold text-gray-700">Alertes haute confiance</h2>
+          <h2 className="text-sm font-semibold text-gray-700">
+            {cameroonOnly ? 'Alertes Cameroun' : 'Alertes haute confiance'}
+          </h2>
           {alerts.length > 0 && (
             <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
               {alerts.length}
@@ -58,7 +65,7 @@ export default function AlertsPanel({ onOpenDetail }) {
           <div className="py-8 text-center text-sm text-gray-400">Chargement…</div>
         ) : alerts.length === 0 ? (
           <div className="py-8 text-center text-sm text-gray-400">
-            Aucune alerte sur les 7 derniers jours
+            {cameroonOnly ? 'Aucune alerte Cameroun sur les 7 derniers jours' : 'Aucune alerte sur les 7 derniers jours'}
           </div>
         ) : (
           alerts.map(alert => (

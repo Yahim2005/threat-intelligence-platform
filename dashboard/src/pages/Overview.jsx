@@ -199,13 +199,13 @@ export default function Overview({ onOpenDetail, onNavigate }) {
         </div>
       </div>
 
-      {/* ── Cameroun : surveillance nationale ──────────────────── */}
+      {/* ── Surveillance nationale ──────────────────────────────── */}
       {cameroon && (
         <div
           onClick={() => onNavigate('cameroon')}
           className="rounded-2xl border border-[#2c1810]/10 overflow-hidden cursor-pointer
                      hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
-          style={{ background: 'linear-gradient(135deg, #1a3d2e 0%, #2c1810 60%, #7a1f1f 100%)' }}
+          style={{ background: 'linear-gradient(135deg, #2c1810 0%, #4a3020 55%, #6b5740 100%)' }}
         >
           <div className="px-6 py-5 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -214,7 +214,7 @@ export default function Overview({ onOpenDetail, onNavigate }) {
               </div>
               <div>
                 <p className="text-xs font-semibold text-[#e8d5b7] uppercase tracking-widest mb-1">
-                  🇨🇲 Surveillance Cameroun
+                  Surveillance nationale
                 </p>
                 <h2 className="text-lg font-bold text-white"
                     style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
@@ -331,40 +331,54 @@ export default function Overview({ onOpenDetail, onNavigate }) {
       </div>
 
       {/* ── Section explicative ───────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
         {[
           {
             emoji: '🛰️',
             title: 'Collecte OSINT automatique',
-            desc: 'La plateforme agrège en continu des indicateurs de compromission (IOCs) depuis 10+ sources publiques : abuse.ch, AlienVault OTX, CISA KEV, Spamhaus, NVD et d\'autres. Chaque collecte est journalisée et traçable.',
+            desc: 'Agrégation continue d\'indicateurs de compromission (IOCs) depuis 10+ sources publiques : abuse.ch, AlienVault OTX, CISA KEV, Spamhaus, NVD et d\'autres. Chaque collecte est journalisée et traçable.',
             items: ['IPs malveillantes', 'Domaines suspects', 'Hashes de malwares', 'CVEs exploitées'],
+            accent: false,
           },
           {
             emoji: '⚡',
             title: 'Analyse & Scoring',
             desc: 'Chaque IOC est normalisé, enrichi (GeoIP, DNS, WHOIS) puis scoré via un algorithme à 7 composantes : fiabilité de la source, corroboration, diversité, type, récence, tags malware et réputation externe.',
             items: ['Score 0–100', 'Enrichissement GeoIP', 'Tags automatiques', 'MITRE ATT&CK'],
+            accent: false,
           },
           {
             emoji: '🔗',
-            title: 'Corrélation & Alertes',
-            desc: 'Le moteur de corrélation regroupe les IOCs liés en clusters de menaces (Threats). Les IOCs haute confiance déclenchent des alertes visibles en temps réel sur ce dashboard.',
-            items: ['Clusters de menaces', 'Graphe de relations', 'Alertes temps réel', 'Export STIX/CSV'],
+            title: 'Corrélation',
+            desc: 'Le moteur de corrélation regroupe les IOCs liés en clusters de menaces (Threats), révélant des campagnes coordonnées plutôt que des indicateurs isolés.',
+            items: ['Clusters de menaces', 'Graphe de relations', 'Score Cameroun agrégé'],
+            accent: false,
           },
-        ].map(({ emoji, title, desc, items }) => (
+          {
+            emoji: '🛡️',
+            title: 'Surveillance nationale',
+            desc: 'Trois modules dédiés surveillent activement les institutions camerounaises : typosquatting de leurs domaines officiels, certificats SSL suspects, et surface d\'attaque exposée sur leurs plages IP.',
+            items: ['Typosquatting (dnstwist)', 'Certificate Transparency', 'Surface d\'attaque exposée'],
+            accent: true,
+          },
+        ].map(({ emoji, title, desc, items, accent }) => (
           <div key={title}
-               className="bg-white rounded-2xl border border-[#ede8e3] p-6 hover:border-[#c4a882] hover:shadow-md transition-all duration-200">
+               className={`rounded-2xl border p-6 hover:shadow-md transition-all duration-200 ${
+                 accent
+                   ? 'bg-[#2c1810] border-[#2c1810] hover:border-[#4a3020]'
+                   : 'bg-white border-[#ede8e3] hover:border-[#c4a882]'
+               }`}>
             <div className="text-3xl mb-3">{emoji}</div>
-            <h3 className="text-sm font-bold text-gray-900 mb-2"
+            <h3 className={`text-sm font-bold mb-2 ${accent ? 'text-white' : 'text-gray-900'}`}
                 style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
               {title}
             </h3>
-            <p className="text-xs text-gray-400 leading-relaxed mb-4">{desc}</p>
+            <p className={`text-xs leading-relaxed mb-4 ${accent ? 'text-white/60' : 'text-gray-400'}`}>{desc}</p>
             <div className="space-y-1.5">
               {items.map(item => (
                 <div key={item} className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#c4a882] shrink-0" />
-                  <span className="text-xs text-[#8b7355] font-medium">{item}</span>
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${accent ? 'bg-[#e8d5b7]' : 'bg-[#c4a882]'}`} />
+                  <span className={`text-xs font-medium ${accent ? 'text-[#e8d5b7]' : 'text-[#8b7355]'}`}>{item}</span>
                 </div>
               ))}
             </div>
@@ -433,8 +447,8 @@ export default function Overview({ onOpenDetail, onNavigate }) {
         </ResponsiveContainer>
       </div>
 
-      {/* ── Alertes ───────────────────────────────────────────── */}
-      <AlertsPanel onOpenDetail={onOpenDetail} />
+      {/* ── Alertes Cameroun ───────────────────────────────────── */}
+      <AlertsPanel onOpenDetail={onOpenDetail} cameroonOnly />
 
     </div>
   )

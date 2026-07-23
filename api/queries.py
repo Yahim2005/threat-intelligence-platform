@@ -26,6 +26,7 @@ def get_indicators(
     tlp: Optional[str] = None,
     search: Optional[str] = None,
     cameroon: Optional[bool] = None,
+    cameroon_relevance_min: Optional[int] = None,
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[Indicator], int]:
@@ -47,6 +48,8 @@ def get_indicators(
         q = q.join(Indicator.tags).filter(Tag.name == tag_slug)
     if cameroon:
         q = q.filter(Indicator.cameroon_relevance > 0)
+    if cameroon_relevance_min is not None:
+        q = q.filter(Indicator.cameroon_relevance >= cameroon_relevance_min)
     if search:
         q = q.filter(Indicator.value.ilike(f"%{search}%"))
 
@@ -106,6 +109,10 @@ def get_threats(
             for tag in ind.tags:
                 tag_counts[tag.name] = tag_counts.get(tag.name, 0) + 1
         top_tags = sorted(tag_counts, key=lambda k: tag_counts[k], reverse=True)[:5]
+        cameroon_relevance = max(
+            (i.cameroon_relevance for i in indicators if i.cameroon_relevance is not None),
+            default=0,
+        )
 
         results.append({
             "id": str(threat.id),
@@ -113,6 +120,7 @@ def get_threats(
             "indicator_count": len(indicators),
             "avg_confidence": round(avg_confidence, 2) if avg_confidence is not None else None,
             "top_tags": top_tags,
+            "cameroon_relevance": cameroon_relevance,
         })
 
     return results, total
@@ -258,21 +266,35 @@ def get_ingestion_trends(session: Session, days: int = 30) -> list[dict]:
 
     return [{"date": str(row.day), "count": int(row.total)} for row in rows]
 
-def get_alerts(session: Session, threshold: int = 75, hours: int = 24, limit: int = 20) -> list[dict]:
+def get_alerts(
+    session: Session,
+    threshold: int = 75,
+    hours: int = 24,
+    limit: int = 20,
+    cameroon_only: bool = False,
+) -> list[dict]:
     """
     Retourne les IOCs actifs haute confiance vus récemment.
-    threshold : score minimum (défaut 75)
-    hours     : fenêtre temporelle en heures (défaut 24h)
-    limit     : nombre max de résultats
+    threshold     : score minimum (défaut 75)
+    hours         : fenêtre temporelle en heures (défaut 24h)
+    limit         : nombre max de résultats
+    cameroon_only : ne garder que les IOCs pertinents pour le Cameroun
+                    (cameroon_relevance > 0) — utilisé par le panneau
+                    d'alertes Cameroun de l'Overview
     """
     since = datetime.utcnow() - timedelta(hours=hours)
 
-    rows = (
+    q = (
         session.query(Indicator)
         .filter(Indicator.status == "active")
         .filter(Indicator.confidence >= threshold)
         .filter(Indicator.last_seen >= since)
-        .order_by(Indicator.confidence.desc())
+    )
+    if cameroon_only:
+        q = q.filter(Indicator.cameroon_relevance > 0)
+
+    rows = (
+        q.order_by(Indicator.confidence.desc())
         .limit(limit)
         .all()
     )
@@ -624,3 +646,288 @@ def get_monitored_assets(
         }
         for a in assets
     ]
+
+
+def report_false_positive(
+    session: Session,
+    indicator_id: str,
+    monitored_asset_id: Optional[str] = None,
+) -> dict:
+    """
+    Marque un IOC typosquat/CT comme faux positif :
+    - status -> whitelisted (jamais de suppression)
+    - retrait des tags typosquat/ct trompeurs
+    - cameroon_relevance remis à 0
+    - si monitored_asset_id fourni : ajoute la valeur comme alias connu
+      de cette institution, pour que les futurs scans l'excluent automatiquement
+    """
+    from app.models.enums import IndicatorStatus
+
+    indicator = session.query(Indicator).filter_by(id=indicator_id).first()
+    if not indicator:
+        raise ValueError(f"Indicator {indicator_id} introuvable")
+
+    false_positive_tags = {
+        "typosquat", "typosquat:confirmed", "typosquat:potential",
+        "ct-monitor", "ct:confirmed", "ct:potential",
+    }
+    removed_tags = [t.name for t in indicator.tags if t.name in false_positive_tags]
+
+    indicator.status = IndicatorStatus.whitelisted
+    indicator.tags = [t for t in indicator.tags if t.name not in false_positive_tags]
+    indicator.cameroon_relevance = 0
+
+    alias_added = False
+    if monitored_asset_id:
+        asset = session.query(MonitoredAsset).filter_by(id=monitored_asset_id).first()
+        if asset:
+            aliases = list(asset.known_aliases or [])
+            if indicator.value.lower() not in [a.lower() for a in aliases]:
+                aliases.append(indicator.value)
+                asset.known_aliases = aliases
+                alias_added = True
+
+    session.commit()
+
+    return {
+        "indicator_id": str(indicator.id),
+        "value": indicator.value,
+        "status": indicator.status.value,
+        "removed_tags": removed_tags,
+        "alias_added": alias_added,
+    }
+
+
+def get_cameroon_timeline(session: Session, days: int = 30) -> list[dict]:
+    """
+    Nouvelles détections Cameroun par jour, sur les N derniers jours :
+    typosquatting, certificats suspects, IPs exposées.
+    Permet de visualiser si la pression monte dans le temps.
+    """
+    from datetime import timedelta
+    since = datetime.utcnow() - timedelta(days=days)
+
+    typosquat_counts = dict(
+        session.query(
+            func.date(Indicator.created_at),
+            func.count(Indicator.id),
+        )
+        .join(Indicator.tags)
+        .filter(Tag.name == "typosquat", Indicator.created_at >= since)
+        .group_by(func.date(Indicator.created_at))
+        .all()
+    )
+
+    ct_counts = dict(
+        session.query(
+            func.date(Indicator.created_at),
+            func.count(Indicator.id),
+        )
+        .join(Indicator.tags)
+        .filter(Tag.name == "ct-monitor", Indicator.created_at >= since)
+        .group_by(func.date(Indicator.created_at))
+        .all()
+    )
+
+    exposed_counts = dict(
+        session.query(
+            func.date(ExposedAsset.first_seen),
+            func.count(ExposedAsset.id),
+        )
+        .filter(ExposedAsset.first_seen >= since)
+        .group_by(func.date(ExposedAsset.first_seen))
+        .all()
+    )
+
+    all_dates = sorted(set(typosquat_counts) | set(ct_counts) | set(exposed_counts))
+
+    return [
+        {
+            "date": str(d),
+            "typosquat": typosquat_counts.get(d, 0),
+            "ct_monitor": ct_counts.get(d, 0),
+            "exposed_assets": exposed_counts.get(d, 0),
+        }
+        for d in all_dates
+    ]
+
+
+def get_institutions_ranked(session: Session) -> list[dict]:
+    """
+    Classe les institutions par score de risque composite :
+    typosquats confirmés (poids 3) + IPs haut risque exposées (poids 3)
+    + IPs risque moyen (poids 1) + certificats suspects (poids 2).
+    """
+    assets = session.query(MonitoredAsset).filter_by(active=True).all()
+
+    # Compte les IOCs typosquat/ct par institution via le tag typosquat:{acronym}
+    tag_rows = (
+        session.query(Tag.name, func.count(Indicator.id))
+        .join(Indicator.tags)
+        .filter(Tag.name.like("typosquat:%") | Tag.name.like("ct:%"))
+        .filter(Tag.name.notin_(["typosquat:confirmed", "typosquat:potential", "ct:confirmed", "ct:potential"]))
+        .group_by(Tag.name)
+        .all()
+    )
+    tag_counts: dict[str, int] = {name: count for name, count in tag_rows}
+
+    exposed_rows = (
+        session.query(
+            ExposedAsset.monitored_asset_id,
+            ExposedAsset.risk_level,
+            func.count(ExposedAsset.id),
+        )
+        .filter(ExposedAsset.monitored_asset_id.isnot(None))
+        .group_by(ExposedAsset.monitored_asset_id, ExposedAsset.risk_level)
+        .all()
+    )
+    exposed_by_asset: dict[str, dict[str, int]] = {}
+    for asset_id, risk, count in exposed_rows:
+        exposed_by_asset.setdefault(str(asset_id), {})[risk] = count
+
+    results = []
+    for a in assets:
+        key = (a.acronym or a.name[:20]).lower().replace(" ", "_")
+        typosquat_hits = tag_counts.get(f"typosquat:{key}", 0)
+        ct_hits = tag_counts.get(f"ct:{key}", 0)
+        exposure = exposed_by_asset.get(str(a.id), {})
+        high = exposure.get("high", 0)
+        medium = exposure.get("medium", 0)
+
+        score = typosquat_hits * 3 + high * 3 + medium * 1 + ct_hits * 2
+
+        if score == 0:
+            continue  # on n'affiche que les institutions avec un signal réel
+
+        results.append({
+            "id": str(a.id),
+            "name": a.name,
+            "acronym": a.acronym,
+            "category": a.category.value,
+            "typosquat_findings": typosquat_hits,
+            "ct_findings": ct_hits,
+            "exposed_high_risk": high,
+            "exposed_medium_risk": medium,
+            "risk_score": score,
+        })
+
+    results.sort(key=lambda r: r["risk_score"], reverse=True)
+    return results
+
+
+def get_vuln_severity_breakdown(session: Session) -> dict:
+    """
+    Croise les CVE exposées (table exposed_assets) avec les scores CVSS
+    déjà collectés via le collecteur NVD, pour distinguer une CVE critique
+    d'une CVE mineure plutôt que de simplement compter les CVE.
+    """
+    assets = session.query(ExposedAsset.vulns).filter(ExposedAsset.vulns.isnot(None)).all()
+
+    cve_occurrences: dict[str, int] = {}
+    for (vulns,) in assets:
+        for cve_id in (vulns or []):
+            cve_occurrences[cve_id] = cve_occurrences.get(cve_id, 0) + 1
+
+    if not cve_occurrences:
+        return {
+            "critical": 0, "high": 0, "medium": 0, "low": 0, "unknown": 0,
+            "distinct_cves": 0, "total_occurrences": 0,
+        }
+
+    cve_rows = (
+        session.query(Indicator.value, Indicator.raw_metadata)
+        .filter(Indicator.type == "cve", Indicator.value.in_(list(cve_occurrences.keys())))
+        .all()
+    )
+    cvss_scores: dict[str, float] = {}
+    for value, metadata in cve_rows:
+        score = (metadata or {}).get("cvss_score")
+        if score is not None:
+            try:
+                cvss_scores[value] = float(score)
+            except (ValueError, TypeError):
+                pass
+
+    buckets = {"critical": 0, "high": 0, "medium": 0, "low": 0, "unknown": 0}
+    for cve_id, occurrences in cve_occurrences.items():
+        score = cvss_scores.get(cve_id)
+        if score is None:
+            buckets["unknown"] += occurrences
+        elif score >= 9.0:
+            buckets["critical"] += occurrences
+        elif score >= 7.0:
+            buckets["high"] += occurrences
+        elif score >= 4.0:
+            buckets["medium"] += occurrences
+        else:
+            buckets["low"] += occurrences
+
+    return {
+        **buckets,
+        "distinct_cves": len(cve_occurrences),
+        "total_occurrences": sum(cve_occurrences.values()),
+    }
+
+
+def create_monitored_asset(session: Session, data: dict) -> dict:
+    """Crée une nouvelle institution surveillée."""
+    from app.models.enums import AssetCategory, DomainStatus
+
+    asset = MonitoredAsset(
+        id=uuid4(),
+        name=data["name"],
+        acronym=data.get("acronym"),
+        category=AssetCategory(data["category"]),
+        domain=data.get("domain"),
+        domain_status=DomainStatus(data.get("domain_status", "unconfirmed")),
+        asn=data.get("asn"),
+        known_aliases=data.get("known_aliases", []),
+    )
+    session.add(asset)
+    session.commit()
+    return {
+        "id": str(asset.id),
+        "name": asset.name,
+        "acronym": asset.acronym,
+        "category": asset.category.value,
+        "domain": asset.domain,
+        "domain_status": asset.domain_status.value,
+        "asn": asset.asn,
+    }
+
+
+def update_monitored_asset(session: Session, asset_id: str, data: dict) -> dict:
+    """Met à jour une institution surveillée (champs partiels acceptés)."""
+    from app.models.enums import AssetCategory, DomainStatus
+
+    asset = session.query(MonitoredAsset).filter_by(id=asset_id).first()
+    if not asset:
+        raise ValueError(f"MonitoredAsset {asset_id} introuvable")
+
+    if "name" in data and data["name"] is not None:
+        asset.name = data["name"]
+    if "acronym" in data:
+        asset.acronym = data["acronym"]
+    if "category" in data and data["category"] is not None:
+        asset.category = AssetCategory(data["category"])
+    if "domain" in data:
+        asset.domain = data["domain"]
+    if "domain_status" in data and data["domain_status"] is not None:
+        asset.domain_status = DomainStatus(data["domain_status"])
+    if "asn" in data:
+        asset.asn = data["asn"]
+    if "known_aliases" in data and data["known_aliases"] is not None:
+        asset.known_aliases = data["known_aliases"]
+    if "active" in data and data["active"] is not None:
+        asset.active = data["active"]
+
+    session.commit()
+    return {
+        "id": str(asset.id),
+        "name": asset.name,
+        "acronym": asset.acronym,
+        "category": asset.category.value,
+        "domain": asset.domain,
+        "domain_status": asset.domain_status.value,
+        "asn": asset.asn,
+    }

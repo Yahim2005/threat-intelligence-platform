@@ -54,6 +54,7 @@ class ThreatResponse(BaseModel):
     indicator_count: int
     avg_confidence: Optional[float]
     top_tags: list[str]
+    cameroon_relevance: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -235,3 +236,66 @@ class MonitoredAssetResponse(BaseModel):
     domain: Optional[str]
     domain_status: str
     asn: Optional[int]
+
+
+class FalsePositiveRequest(BaseModel):
+    indicator_id: str
+    monitored_asset_id: Optional[str] = None
+
+
+class FalsePositiveResponse(BaseModel):
+    indicator_id: str
+    value: str
+    status: str
+    removed_tags: list[str]
+    alias_added: bool
+
+
+class CameroonTimelinePointResponse(BaseModel):
+    date: str
+    typosquat: int
+    ct_monitor: int
+    exposed_assets: int
+
+
+class InstitutionRiskResponse(BaseModel):
+    id: str
+    name: str
+    acronym: Optional[str]
+    category: str
+    typosquat_findings: int
+    ct_findings: int
+    exposed_high_risk: int
+    exposed_medium_risk: int
+    risk_score: int
+
+
+class VulnSeverityResponse(BaseModel):
+    critical: int
+    high: int
+    medium: int
+    low: int
+    unknown: int
+    distinct_cves: int
+    total_occurrences: int
+
+
+class MonitoredAssetCreate(BaseModel):
+    name: str
+    acronym: Optional[str] = None
+    category: str
+    domain: Optional[str] = None
+    domain_status: Optional[str] = "unconfirmed"
+    asn: Optional[int] = None
+    known_aliases: Optional[list[str]] = []
+
+
+class MonitoredAssetUpdate(BaseModel):
+    name: Optional[str] = None
+    acronym: Optional[str] = None
+    category: Optional[str] = None
+    domain: Optional[str] = None
+    domain_status: Optional[str] = None
+    asn: Optional[int] = None
+    known_aliases: Optional[list[str]] = None
+    active: Optional[bool] = None
