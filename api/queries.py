@@ -64,7 +64,25 @@ def get_indicators(
 
 
 def get_indicator_by_value(session: Session, value: str) -> Optional[Indicator]:
-    return session.query(Indicator).filter(Indicator.value == value).first()
+    """
+    Recherche par valeur exacte d'abord. Si rien n'est trouvé, tente une
+    normalisation (utile pour les numéros de téléphone locaux comme
+    '656708967' qui doivent matcher '+237656708967' en base, ou pour des
+    IOCs saisis dans un format légèrement différent du format canonique).
+    """
+    ind = session.query(Indicator).filter(Indicator.value == value).first()
+    if ind:
+        return ind
+
+    from core.normalize import detect_and_normalize
+    normalized = detect_and_normalize(value)
+    if normalized is None:
+        return None
+    norm_value, _ = normalized
+    if norm_value == value:
+        return None  # déjà tenté, pas la peine de refaire la même requête
+
+    return session.query(Indicator).filter(Indicator.value == norm_value).first()
 
 
 # ─── Sources ─────────────────────────────────────────────────────────────────
@@ -931,3 +949,78 @@ def update_monitored_asset(session: Session, asset_id: str, data: dict) -> dict:
         "domain_status": asset.domain_status.value,
         "asn": asset.asn,
     }
+
+
+def get_sector_breakdown(session: Session) -> list[dict]:
+    """
+    Agrège le risque par secteur d'institution (ministère, banque, télécom,
+    société publique, institution) — pour visualiser quel secteur est le
+    plus exposé globalement, pas juste institution par institution.
+    """
+    assets = session.query(MonitoredAsset).filter_by(active=True).all()
+
+    tag_rows = (
+        session.query(Tag.name, func.count(Indicator.id))
+        .join(Indicator.tags)
+        .filter(Tag.name.like("typosquat:%"))
+        .filter(Tag.name.notin_(["typosquat:confirmed", "typosquat:potential"]))
+        .group_by(Tag.name)
+        .all()
+    )
+    tag_counts: dict[str, int] = {name: count for name, count in tag_rows}
+
+    exposed_rows = (
+        session.query(
+            ExposedAsset.monitored_asset_id,
+            ExposedAsset.risk_level,
+            func.count(ExposedAsset.id),
+        )
+        .filter(ExposedAsset.monitored_asset_id.isnot(None))
+        .group_by(ExposedAsset.monitored_asset_id, ExposedAsset.risk_level)
+        .all()
+    )
+    exposed_by_asset: dict[str, dict[str, int]] = {}
+    for asset_id, risk, count in exposed_rows:
+        exposed_by_asset.setdefault(str(asset_id), {})[risk] = count
+
+    sectors: dict[str, dict] = {}
+    for a in assets:
+        cat = a.category.value
+        if cat not in sectors:
+            sectors[cat] = {
+                "category": cat,
+                "institution_count": 0,
+                "typosquat_findings": 0,
+                "exposed_high_risk": 0,
+                "exposed_medium_risk": 0,
+                "domains_confirmed": 0,
+            }
+        sectors[cat]["institution_count"] += 1
+
+        key = (a.acronym or a.name[:20]).lower().replace(" ", "_")
+        sectors[cat]["typosquat_findings"] += tag_counts.get(f"typosquat:{key}", 0)
+
+        exposure = exposed_by_asset.get(str(a.id), {})
+        sectors[cat]["exposed_high_risk"] += exposure.get("high", 0)
+        sectors[cat]["exposed_medium_risk"] += exposure.get("medium", 0)
+
+        if a.domain_status.value == "confirmed":
+            sectors[cat]["domains_confirmed"] += 1
+
+    return sorted(sectors.values(), key=lambda s: s["exposed_high_risk"] + s["typosquat_findings"], reverse=True)
+
+
+def get_top_exposed_ports(session: Session, limit: int = 10) -> list[dict]:
+    """
+    Ports les plus fréquemment exposés sur la surface d'attaque — pour
+    repérer les tendances (ex: beaucoup de RDP/MySQL ouverts).
+    """
+    assets = session.query(ExposedAsset.ports).filter(ExposedAsset.ports.isnot(None)).all()
+
+    port_counts: dict[int, int] = {}
+    for (ports,) in assets:
+        for p in (ports or []):
+            port_counts[p] = port_counts.get(p, 0) + 1
+
+    top = sorted(port_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
+    return [{"port": p, "count": c} for p, c in top]

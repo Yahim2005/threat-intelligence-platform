@@ -679,3 +679,21 @@ def update_monitored_asset_route(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return schemas.MonitoredAssetResponse(**result)
+
+
+@app.get("/cameroon/sector-breakdown", response_model=list[schemas.SectorBreakdownResponse], tags=["Cameroon"])
+@limiter.limit("60/minute")
+def get_sector_breakdown_route(request: Request, db: Session = Depends(get_db)):
+    """Agrège le risque par secteur d'institution."""
+    return [schemas.SectorBreakdownResponse(**r) for r in queries.get_sector_breakdown(db)]
+
+
+@app.get("/cameroon/top-ports", response_model=list[schemas.PortCountResponse], tags=["Cameroon"])
+@limiter.limit("60/minute")
+def get_top_ports_route(
+    request: Request,
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """Ports les plus fréquemment exposés sur la surface d'attaque."""
+    return [schemas.PortCountResponse(**r) for r in queries.get_top_exposed_ports(db, limit=limit)]

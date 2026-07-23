@@ -299,3 +299,17 @@ class MonitoredAssetUpdate(BaseModel):
     asn: Optional[int] = None
     known_aliases: Optional[list[str]] = None
     active: Optional[bool] = None
+
+
+class SectorBreakdownResponse(BaseModel):
+    category: str
+    institution_count: int
+    typosquat_findings: int
+    exposed_high_risk: int
+    exposed_medium_risk: int
+    domains_confirmed: int
+
+
+class PortCountResponse(BaseModel):
+    port: int
+    count: int

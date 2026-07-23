@@ -223,27 +223,34 @@ def run() -> None:
             continue
 
         for prefix in prefixes:
-            session = SessionLocal()
             try:
-                progress = (
-                    session.query(ExposedAssetScanProgress)
-                    .filter_by(asn=asn, prefix=prefix)
-                    .first()
-                )
-                if progress and progress.status == "done":
-                    session.close()
-                    continue
-
-                if not progress:
-                    progress = ExposedAssetScanProgress(
-                        id=uuid4(), asn=asn, prefix=prefix, status="in_progress"
+                session = SessionLocal()
+                try:
+                    progress = (
+                        session.query(ExposedAssetScanProgress)
+                        .filter_by(asn=asn, prefix=prefix)
+                        .first()
                     )
-                    session.add(progress)
-                else:
-                    progress.status = "in_progress"
-                session.commit()
-            finally:
-                session.close()
+                    if progress and progress.status == "done":
+                        session.close()
+                        continue
+
+                    if not progress:
+                        progress = ExposedAssetScanProgress(
+                            id=uuid4(), asn=asn, prefix=prefix, status="in_progress"
+                        )
+                        session.add(progress)
+                    else:
+                        progress.status = "in_progress"
+                    session.commit()
+                finally:
+                    session.close()
+            except Exception as e:
+                # Erreur DB transitoire (réseau, veille...) — on ne perd pas
+                # tout le scan pour un seul préfixe : on log et on continue.
+                # Ce préfixe sera retenté au prochain lancement (pas marqué "done").
+                logger.error(f"Erreur DB sur le préfixe {prefix} (AS{asn}), on continue : {e}")
+                continue
 
             network_size = ipaddress.ip_network(prefix, strict=False).num_addresses
             logger.info(f"AS{asn} — scan de {prefix} ({network_size} IPs)…")
@@ -258,22 +265,25 @@ def run() -> None:
             failure_rate = stats["network_failures"] / max(stats["scanned"] + stats["network_failures"], 1)
             mark_done = failure_rate < 0.10  # tolère jusqu'à 10% d'échecs isolés
 
-            session = SessionLocal()
             try:
-                progress = (
-                    session.query(ExposedAssetScanProgress)
-                    .filter_by(asn=asn, prefix=prefix)
-                    .first()
-                )
-                if progress:
-                    if mark_done:
-                        progress.status = "done"
-                        progress.scanned_at = datetime.utcnow()
-                    else:
-                        progress.status = "pending"  # reste à reprendre
-                    session.commit()
-            finally:
-                session.close()
+                session = SessionLocal()
+                try:
+                    progress = (
+                        session.query(ExposedAssetScanProgress)
+                        .filter_by(asn=asn, prefix=prefix)
+                        .first()
+                    )
+                    if progress:
+                        if mark_done:
+                            progress.status = "done"
+                            progress.scanned_at = datetime.utcnow()
+                        else:
+                            progress.status = "pending"
+                        session.commit()
+                finally:
+                    session.close()
+            except Exception as e:
+                logger.error(f"Erreur DB en finalisant le préfixe {prefix} (AS{asn}) : {e}")
 
             status_note = "" if mark_done else " — NON marqué terminé (trop d'échecs réseau, sera repris)"
             logger.info(

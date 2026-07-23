@@ -1,9 +1,9 @@
 // src/pages/Lookup.jsx
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import TLPBadge from '../components/TLPBadge'
 import StatusBadge from '../components/StatusBadge'
-import { Search, ShieldCheck, ShieldAlert, ShieldX, Loader } from 'lucide-react'
+import { Search, ShieldCheck, ShieldAlert, ShieldX, Loader, AlertTriangle } from 'lucide-react'
 
 function RiskBadge({ confidence }) {
   if (confidence >= 75) return (
@@ -11,7 +11,7 @@ function RiskBadge({ confidence }) {
       <ShieldAlert size={20} className="text-red-500" />
       <div>
         <p className="text-sm font-semibold text-red-700">Menace confirmée</p>
-        <p className="text-xs text-red-500">Confidence {confidence}/100 — IOC actif dans notre base</p>
+        <p className="text-xs text-red-500">Confidence {confidence}/100, IOC actif dans notre base</p>
       </div>
     </div>
   )
@@ -20,7 +20,7 @@ function RiskBadge({ confidence }) {
       <ShieldX size={20} className="text-amber-500" />
       <div>
         <p className="text-sm font-semibold text-amber-700">Suspect</p>
-        <p className="text-xs text-amber-500">Confidence {confidence}/100 — à surveiller</p>
+        <p className="text-xs text-amber-500">Confidence {confidence}/100, à surveiller</p>
       </div>
     </div>
   )
@@ -31,6 +31,52 @@ function RiskBadge({ confidence }) {
         <p className="text-sm font-semibold text-emerald-700">Faible risque</p>
         <p className="text-xs text-emerald-500">Confidence {confidence}/100</p>
       </div>
+    </div>
+  )
+}
+
+// ── Défilement d'exemples réels (chargés depuis l'API) ──────────────
+function ExamplesTicker({ onPick }) {
+  const [examples, setExamples] = useState([])
+
+  useEffect(() => {
+    api.indicators({ page_size: 12, status: 'active' })
+      .then(d => setExamples(d.items.map(i => i.value)))
+      .catch(() => {})
+  }, [])
+
+  if (examples.length === 0) return null
+
+  const doubled = [...examples, ...examples]
+
+  return (
+    <div className="overflow-hidden">
+      <p className="text-xs text-gray-400 mb-2">Exemples issus de notre base, cliquez pour essayer :</p>
+      <div className="relative overflow-hidden">
+        <div className="flex gap-2 animate-lookup-scroll w-max">
+          {doubled.map((v, i) => (
+            <button
+              key={i}
+              onClick={() => onPick(v)}
+              className="shrink-0 px-3 py-1.5 text-xs font-mono bg-white border border-[#ede8e3] text-[#8b7355] rounded-full hover:border-[#c4a882] hover:bg-[#faf8f5] transition-colors"
+            >
+              {v.length > 28 ? v.slice(0, 28) + '…' : v}
+            </button>
+          ))}
+        </div>
+      </div>
+      <style>{`
+        @keyframes lookup-scroll {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-lookup-scroll {
+          animation: lookup-scroll 30s linear infinite;
+        }
+        .animate-lookup-scroll:hover {
+          animation-play-state: paused;
+        }
+      `}</style>
     </div>
   )
 }
@@ -46,8 +92,6 @@ export default function Lookup({ initialQuery = '' }) {
     setStatus('loading')
     setResult(null)
     try {
-      const data = await api.indicators({ page: 1, page_size: 1 })
-      // On cherche par valeur exacte
       const ind = await api.lookupByValue(val)
       setResult(ind)
       setStatus('found')
@@ -64,12 +108,25 @@ export default function Lookup({ initialQuery = '' }) {
     if (e.key === 'Enter') search()
   }
 
+  function pickExample(value) {
+    setQuery(value)
+    search(value)
+  }
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div>
         <h1 className="text-xl font-bold text-gray-800">IOC Lookup</h1>
         <p className="text-sm text-gray-400 mt-1">
-          Vérifie si une IP, un domaine, un email ou un hash est référencé dans notre base de menaces.
+          Vérifie si une IP, un domaine, un email, un numéro de téléphone ou un hash est référencé dans notre base de menaces.
+        </p>
+      </div>
+
+      {/* Avertissement liens non sûrs */}
+      <div className="flex items-start gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+        <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-amber-700 leading-relaxed">
+          Ne cliquez jamais sur un lien dont vous n'êtes pas sûr à 100 %. Vérifiez-le d'abord ici.
         </p>
       </div>
 
@@ -82,15 +139,15 @@ export default function Lookup({ initialQuery = '' }) {
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={onKey}
-            placeholder="Ex : 185.220.101.47 · evil.com · test@phishing.com · d41d8cd9..."
-            className="w-full pl-9 pr-4 py-3 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 shadow-sm"
+            placeholder="Ex : 185.220.101.47, evil.com, 656708967, d41d8cd9…"
+            className="w-full pl-9 pr-4 py-3 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#c4a882]/40 shadow-sm"
             autoFocus
           />
         </div>
         <button
           onClick={() => search()}
           disabled={status === 'loading' || !query.trim()}
-          className="px-5 py-3 bg-indigo-600 text-white text-sm font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm"
+          className="px-5 py-3 bg-[#8b7355] text-white text-sm font-medium rounded-xl hover:bg-[#6b5740] disabled:opacity-50 transition-colors flex items-center gap-2 shadow-sm"
         >
           {status === 'loading'
             ? <Loader size={15} className="animate-spin" />
@@ -98,6 +155,8 @@ export default function Lookup({ initialQuery = '' }) {
           Rechercher
         </button>
       </div>
+
+      <ExamplesTicker onPick={pickExample} />
 
       {/* Résultats */}
       {status === 'loading' && (
@@ -113,7 +172,9 @@ export default function Lookup({ initialQuery = '' }) {
           <p className="text-sm text-gray-400">
             <span className="font-mono text-gray-600">{query}</span> n'est pas référencé comme IOC.
           </p>
-          <p className="text-xs text-gray-300 mt-2">Cela ne garantit pas l'innocuité — notre base couvre les sources OSINT publiques.</p>
+          <p className="text-xs text-gray-300 mt-2">
+            Cela ne garantit pas l'innocuité, notre base couvre les sources OSINT publiques.
+          </p>
         </div>
       )}
 
@@ -126,7 +187,7 @@ export default function Lookup({ initialQuery = '' }) {
                 <p className="text-xs text-gray-400 mb-1">Valeur recherchée</p>
                 <p className="font-mono text-sm text-gray-800 break-all">{result.value}</p>
               </div>
-              <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-semibold shrink-0">
+              <span className="px-2.5 py-1 bg-[#faf8f5] text-[#8b7355] border border-[#ede8e3] rounded-lg text-xs font-semibold shrink-0">
                 {result.type}
               </span>
             </div>
@@ -145,24 +206,24 @@ export default function Lookup({ initialQuery = '' }) {
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-1">Source</p>
-              <p className="text-gray-700 font-medium">{result.source ?? '—'}</p>
+              <p className="text-gray-700 font-medium">{result.source ?? 'non renseigné'}</p>
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-1">Confidence</p>
               <div className="flex items-center gap-2">
                 <div className="w-20 bg-gray-100 rounded-full h-2">
-                  <div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${result.confidence}%` }} />
+                  <div className="bg-[#8b7355] h-2 rounded-full" style={{ width: `${result.confidence}%` }} />
                 </div>
                 <span className="text-gray-700 font-medium">{result.confidence}/100</span>
               </div>
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-1">Premier vu</p>
-              <p className="text-gray-700">{result.first_seen ? new Date(result.first_seen).toLocaleDateString('fr-FR') : '—'}</p>
+              <p className="text-gray-700">{result.first_seen ? new Date(result.first_seen).toLocaleDateString('fr-FR') : 'non renseigné'}</p>
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-1">Dernier vu</p>
-              <p className="text-gray-700">{result.last_seen ? new Date(result.last_seen).toLocaleDateString('fr-FR') : '—'}</p>
+              <p className="text-gray-700">{result.last_seen ? new Date(result.last_seen).toLocaleDateString('fr-FR') : 'non renseigné'}</p>
             </div>
             {result.tags?.length > 0 && (
               <div className="col-span-2">

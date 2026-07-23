@@ -55,6 +55,8 @@ export const api = {
   institutionsRanked: () => get('/cameroon/institutions/ranked'),
   vulnSeverity: () => get('/cameroon/vuln-severity'),
   reportFalsePositive: (payload) => send('POST', '/cameroon/report-false-positive', payload),
+  sectorBreakdown: () => get('/cameroon/sector-breakdown'),
+  topPorts: (limit=10) => get(`/cameroon/top-ports?limit=${limit}`),
   related:        (value)      => get(`/indicators/${encodeURIComponent(value)}/related`),
   timeline:       (value, days = 30) => get(`/indicators/${encodeURIComponent(value)}/timeline?days=${days}`),
   alerts: (threshold = 75, hours = 168, cameroonOnly = false) => get(`/alerts?threshold=${threshold}&hours=${hours}${cameroonOnly ? '&cameroon_only=true' : ''}`),
