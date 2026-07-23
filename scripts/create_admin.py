@@ -22,9 +22,16 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     sys.exit("❌  DATABASE_URL introuvable dans .env")
 
-EMAIL = "antic1@antic.cm"
-PASSWORD = "AnticCirt1"
-FULL_NAME = "ANTIC CIRT Admin"
+EMAIL = os.getenv("cirt@antic.cm")
+PASSWORD = os.getenv("jesuisducirt")
+FULL_NAME = os.getenv("Admin Antic", "ANTIC CIRT Admin")
+
+if not EMAIL or not PASSWORD:
+    sys.exit(
+        "Erreur : définis ADMIN_EMAIL et ADMIN_PASSWORD en variables "
+        "d'environnement avant de lancer ce script (jamais en dur dans le code).\n"
+        "Exemple : ADMIN_EMAIL=toi@antic.cm ADMIN_PASSWORD=xxx python scripts/create_admin.py"
+    )
 
 engine = create_engine(DATABASE_URL)
 Session = sessionmaker(bind=engine)
@@ -69,4 +76,4 @@ with Session() as db:
         print(f"✅  Compte admin créé : {EMAIL}  (id={user_id})")
 
 print("\nConnexion de test :")
-print(f"  POST /auth/login  →  identifier={EMAIL}  password={PASSWORD}")
+print(f"  POST /auth/login  ->  identifier={EMAIL}  (mot de passe non affiché)")

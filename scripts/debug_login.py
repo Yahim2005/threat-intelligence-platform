@@ -5,8 +5,15 @@ Usage : python scripts/debug_login.py
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-EMAIL = "antic1@antic.cm"
-PASSWORD = "AnticCirt1"
+EMAIL = os.getenv("cirt@antic.cm")
+PASSWORD = os.getenv("jesuisducirt")
+
+if not EMAIL or not PASSWORD:
+    sys.exit(
+        "Erreur : définis ADMIN_EMAIL et ADMIN_PASSWORD en variables "
+        "d'environnement avant de lancer ce script.\n"
+        "Exemple : ADMIN_EMAIL=toi@antic.cm ADMIN_PASSWORD=xxx python scripts/debug_login.py"
+    )
 
 print("1. Chargement de la config...")
 try:
