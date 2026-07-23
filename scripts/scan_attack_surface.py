@@ -2,7 +2,7 @@
 Scan de surface d'attaque nationale.
 
 Pour chaque ASN camerounais suivi (monitored_assets), récupère les plages
-IP annoncées (RIPEstat) puis interroge Shodan InternetDB pour chaque IP —
+IP annoncées (RIPEstat) puis interroge Shodan InternetDB pour chaque IP,
 une simple consultation passive de leur base déjà scannée, pas un scan
 actif de notre part.
 
@@ -50,8 +50,10 @@ logger = logging.getLogger("scan_attack_surface")
 RIPESTAT_URL = "https://stat.ripe.net/data/announced-prefixes/data.json"
 INTERNETDB_URL = "https://internetdb.shodan.io"
 
+MAX_RUNTIME_SECONDS = 5.5 * 3600  # marge de sécurité avant la limite 6h de GitHub Actions
+
 MAX_WORKERS = 5
-TARGET_RPS = 3  # très prudent — la vraie limite observée est bien en-deçà de la doc officielle
+TARGET_RPS = 3  # très prudent, la vraie limite observée est bien en-deçà de la doc officielle
 
 SENSITIVE_PORTS = {
     21: "FTP", 23: "Telnet", 3389: "RDP", 3306: "MySQL",
@@ -62,7 +64,7 @@ SENSITIVE_PORTS = {
 
 class RateLimiter:
     """Limite globale de débit partagée entre threads (fenêtre glissante 1s),
-    avec une pause globale partagée si un 429 est reçu — évite que chaque
+    avec une pause globale partagée si un 429 est reçu, évite que chaque
     thread fasse sa propre pause indépendante, ce qui gaspille du temps
     et continue de marteler le serveur pendant le backoff.
     """
@@ -117,7 +119,7 @@ def query_internetdb(ip: str) -> dict | None:
         if resp.status_code == 404:
             return None
         if resp.status_code == 429:
-            logger.warning("Rate limit atteint — pause de 60s")
+            logger.warning("Rate limit atteint, pause de 60s")
             time.sleep(60)
             return query_internetdb(ip)
         resp.raise_for_status()
@@ -180,7 +182,7 @@ def scan_prefix(asn: int, prefix: str, monitored_asset_id) -> dict:
                 try:
                     data = future.result()
                 except Exception:
-                    # Échec réseau persistant sur cette IP — comptabilisé mais
+                    # Échec réseau persistant sur cette IP, comptabilisé mais
                     # ne bloque pas le reste du préfixe
                     found["network_failures"] += 1
                     continue
@@ -202,6 +204,31 @@ def scan_prefix(asn: int, prefix: str, monitored_asset_id) -> dict:
 
 
 def run() -> None:
+    start_time = time.monotonic()
+
+    # Rafraîchissement hebdomadaire : les préfixes scannés il y a plus de
+    # 7 jours redeviennent "pending" (InternetDB n'est mis à jour qu'une
+    # fois par semaine côté Shodan, inutile de rescanner plus souvent).
+    from sqlalchemy import text as sql_text
+
+    session = SessionLocal()
+    try:
+        stale = session.execute(
+            sql_text(
+                """UPDATE exposed_assets_scan_progress
+                   SET status = 'pending'
+                   WHERE status = 'done' AND scanned_at < now() - interval '7 days'"""
+            )
+        )
+        session.commit()
+        if stale.rowcount:
+            logger.info(f"{stale.rowcount} préfixes remis en file (rafraîchissement hebdomadaire)")
+    except Exception as e:
+        logger.warning(f"Erreur rafraîchissement hebdomadaire : {e}")
+        session.rollback()
+    finally:
+        session.close()
+
     session = SessionLocal()
     try:
         assets = (
@@ -217,12 +244,26 @@ def run() -> None:
 
     total_scanned = total_exposed = total_high_risk = 0
 
+    budget_exceeded = False
+
     for asn, monitored_asset_id in asn_map.items():
+        if budget_exceeded:
+            break
+
         prefixes = get_prefixes_for_asn(asn)
         if not prefixes:
             continue
 
         for prefix in prefixes:
+            if time.monotonic() - start_time > MAX_RUNTIME_SECONDS:
+                logger.info(
+                    "Budget de temps atteint (%.0f min), arrêt propre, "
+                    "reprise au prochain lancement.",
+                    MAX_RUNTIME_SECONDS / 60,
+                )
+                budget_exceeded = True
+                break
+
             try:
                 session = SessionLocal()
                 try:
@@ -246,14 +287,14 @@ def run() -> None:
                 finally:
                     session.close()
             except Exception as e:
-                # Erreur DB transitoire (réseau, veille...) — on ne perd pas
+                # Erreur DB transitoire (réseau, veille...), on ne perd pas
                 # tout le scan pour un seul préfixe : on log et on continue.
                 # Ce préfixe sera retenté au prochain lancement (pas marqué "done").
                 logger.error(f"Erreur DB sur le préfixe {prefix} (AS{asn}), on continue : {e}")
                 continue
 
             network_size = ipaddress.ip_network(prefix, strict=False).num_addresses
-            logger.info(f"AS{asn} — scan de {prefix} ({network_size} IPs)…")
+            logger.info(f"AS{asn} : scan de {prefix} ({network_size} IPs)…")
 
             stats = scan_prefix(asn, prefix, monitored_asset_id)
             total_scanned += stats["scanned"]
@@ -261,7 +302,7 @@ def run() -> None:
             total_high_risk += stats["high_risk"]
 
             # Si trop d'échecs réseau (coupure wifi probable), on NE marque PAS
-            # le préfixe comme terminé — il sera repris entièrement au prochain run
+            # le préfixe comme terminé, il sera repris entièrement au prochain run
             failure_rate = stats["network_failures"] / max(stats["scanned"] + stats["network_failures"], 1)
             mark_done = failure_rate < 0.10  # tolère jusqu'à 10% d'échecs isolés
 
@@ -285,7 +326,7 @@ def run() -> None:
             except Exception as e:
                 logger.error(f"Erreur DB en finalisant le préfixe {prefix} (AS{asn}) : {e}")
 
-            status_note = "" if mark_done else " — NON marqué terminé (trop d'échecs réseau, sera repris)"
+            status_note = "" if mark_done else " (NON marqué terminé, trop d'échecs réseau, sera repris)"
             logger.info(
                 f"  → {stats['scanned']} IPs scannées, "
                 f"{stats['exposed']} exposées, {stats['high_risk']} à haut risque, "
@@ -293,7 +334,7 @@ def run() -> None:
             )
 
     logger.info(
-        f"Terminé — total : {total_scanned} IPs scannées, "
+        f"Terminé, total : {total_scanned} IPs scannées, "
         f"{total_exposed} exposées, {total_high_risk} à haut risque"
     )
 

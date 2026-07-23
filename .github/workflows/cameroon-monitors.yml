@@ -1,0 +1,29 @@
+name: Cameroon Monitors
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # une fois par jour, 3h du matin UTC
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      TIP_API_KEY: ${{ secrets.TIP_API_KEY }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run typosquat monitor
+        run: python -m collectors.typosquat_monitor
+      - name: Run CT monitor
+        run: python -m collectors.ct_monitor
+        continue-on-error: true  # crt.sh est parfois indisponible, ne bloque pas le run
