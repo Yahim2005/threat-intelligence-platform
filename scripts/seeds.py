@@ -56,6 +56,12 @@ SOURCES = [
         "tlp": TLPLevel.CLEAR,
     },
     {
+        "name": "Newly Registered Domains Monitor",
+        "url": "https://whoisds.com/newly-registered-domains",
+        "source_type": SourceType.api,
+        "tlp": TLPLevel.CLEAR,
+    },
+    {
         "name": "Certificate Transparency Monitor (crt.sh)",
         "url": "https://crt.sh/",
         "source_type": SourceType.api,

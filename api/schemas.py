@@ -236,6 +236,7 @@ class MonitoredAssetResponse(BaseModel):
     domain: Optional[str]
     domain_status: str
     asn: Optional[int]
+    verification_note: Optional[str] = None
 
 
 class FalsePositiveRequest(BaseModel):

@@ -17,6 +17,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from app.database import SessionLocal
 from app.models.monitored_asset import MonitoredAsset
+from app.models.enums import DomainStatus
 from app.models.enums import IOCType
 from core.normalize import detect_and_normalize
 from collectors.base import BaseCollector
@@ -56,6 +57,7 @@ class TyposquatMonitor(BaseCollector):
             assets = (
                 session.query(MonitoredAsset)
                 .filter(MonitoredAsset.domain.isnot(None))
+                .filter(MonitoredAsset.domain_status != DomainStatus.not_found)
                 .filter(MonitoredAsset.active.is_(True))
                 .all()
             )

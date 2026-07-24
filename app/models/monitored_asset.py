@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Enum as SAEnum, Integer, String
+from sqlalchemy import Boolean, DateTime, Enum as SAEnum, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,6 +34,7 @@ class MonitoredAsset(Base):
 
     asn: Mapped[int | None] = mapped_column(Integer)
     known_aliases: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    verification_note: Mapped[str | None] = mapped_column(Text)
 
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

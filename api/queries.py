@@ -661,6 +661,7 @@ def get_monitored_assets(
             "domain": a.domain,
             "domain_status": a.domain_status.value,
             "asn": a.asn,
+            "verification_note": a.verification_note,
         }
         for a in assets
     ]
