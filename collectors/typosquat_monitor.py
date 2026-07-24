@@ -78,7 +78,6 @@ class TyposquatMonitor(BaseCollector):
                     [
                         "dnstwist", "--registered", "--format", "json",
                         "--threads", "128",
-                        "--nameservers", "1.1.1.1",
                         domain,
                     ],
                     capture_output=True,
