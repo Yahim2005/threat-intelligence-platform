@@ -19,6 +19,7 @@ from datetime import datetime
 from app.models import Indicator, Sighting, Source, Tag, source
 from app.models.enums import IOCType, IndicatorStatus, TLPLevel
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 from core.quality import check_quality
 
@@ -80,27 +81,60 @@ def get_or_create_indicator(
 
     return indicator, True
 
-def get_or_create_tag(session, name: str) -> Tag:
-    """Cherche un tag par son nom, le crée s'il n'existe pas."""
+def get_or_create_tag(session, name: str, tag_cache: dict | None = None) -> Tag:
+    """Cherche un tag par son nom, le cree s'il n'existe pas.
+    tag_cache (optionnel) : dict {name: Tag} partage sur tout un lot d'appels,
+    pour eviter un SELECT reseau par tag repete des milliers de fois."""
+    if tag_cache is not None and name in tag_cache:
+        return tag_cache[name]
+
     tag = session.query(Tag).filter_by(name=name).first()
     if tag is None:
         tag = Tag(name=name)
         session.add(tag)
         session.flush()
+
+    if tag_cache is not None:
+        tag_cache[name] = tag
     return tag
 
 
-def attach_tag(session, indicator: Indicator, tag_name: str) -> None:
-    """Attache un tag à un indicateur, sans créer de doublon."""
-    tag = get_or_create_tag(session, tag_name)
+def attach_tag(session, indicator: Indicator, tag_name: str, tag_cache: dict | None = None) -> None:
+    """Attache un tag a un indicateur, sans creer de doublon."""
+    tag = get_or_create_tag(session, tag_name, tag_cache=tag_cache)
     if tag not in indicator.tags:
         indicator.tags.append(tag)
 
 
+def _bulk_prefetch_indicators(session, records: list[dict]) -> dict:
+    """Pre-charge en quelques requetes groupees les indicateurs deja en base
+    parmi ceux du lot a traiter, pour eviter un SELECT reseau par
+    enregistrement (determinant sur la latence Cameroun -> Neon)."""
+    values = list({r["value"][:2048] for r in records if r.get("value")})
+    prefetch = {}
+    CHUNK = 2000
+    for i in range(0, len(values), CHUNK):
+        chunk = values[i:i + CHUNK]
+        rows = session.query(Indicator).options(selectinload(Indicator.tags)).filter(Indicator.value.in_(chunk)).all()
+        for ind in rows:
+            key = (ind.value, ind.type.value if hasattr(ind.type, "value") else ind.type)
+            prefetch[key] = ind
+    return prefetch
+
+
 def store_records(records: list[dict], source_name: str, session) -> dict:
     """Persiste une liste d'enregistrements standards, quelle que soit la source.
-    Chaque record est committé individuellement : un échec sur un record
-    n'affecte jamais les autres (isolation au niveau de la transaction).
+
+    Optimisations reseau essentielles pour les gros volumes (dizaines de
+    milliers d'enregistrements), determinantes sur une latence Cameroun -> Neon
+    de 150-250ms par aller-retour :
+    - indicateurs deja connus pre-charges en quelques requetes groupees ;
+    - les NOUVEAUX indicateurs d'un meme lot de CHUNK_SIZE sont tous crees en
+      memoire puis flushes en UNE SEULE fois (SQLAlchemy regroupe alors les
+      INSERT en peu d'aller-retours), au lieu d'un flush par enregistrement ;
+    - le commit reseau reel n'a lieu qu'une fois par lot, via un SAVEPOINT qui
+      isole un lot defaillant sans affecter les autres lots deja commites.
+
     Retourne un dict de stats {created, updated, sightings, errors}."""
     source = session.query(Source).filter_by(name=source_name).first()
     if not source:
@@ -110,49 +144,92 @@ def store_records(records: list[dict], source_name: str, session) -> dict:
         )
 
     stats = {"created": 0, "updated": 0, "sightings": 0, "errors": 0}
+    if not records:
+        return stats
 
-    for record in records:
+    CHUNK_SIZE = 500
+    indicator_cache = _bulk_prefetch_indicators(session, records)
+    tag_cache = {}
+
+    for chunk_start in range(0, len(records), CHUNK_SIZE):
+        chunk = records[chunk_start:chunk_start + CHUNK_SIZE]
         try:
-            value = record["value"][:2048]  # tronque pour respecter la limite de colonne
-            ioc_type = record["type"]
-            seen_at = record.get("seen_at") or datetime.utcnow()
+            with session.begin_nested():
+                # Passe 1 : creer en memoire tous les NOUVEAUX indicateurs du
+                # lot, sans flush individuel.
+                pending_new = []  # [(key, indicator, record), ...]
+                to_process = []   # [(indicator, record, created_bool), ...]
 
-            indicator, created = get_or_create_indicator(
-                session, value, ioc_type, source.id, tlp=source.tlp
-            )
+                for record in chunk:
+                    value = record["value"][:2048]
+                    ioc_type = record["type"]
+                    ioc_type_key = ioc_type.value if hasattr(ioc_type, "value") else ioc_type
+                    key = (value, ioc_type_key)
 
-            # Fenêtre temporelle
-            if not indicator.first_seen or seen_at < indicator.first_seen:
-                indicator.first_seen = seen_at
-            if not indicator.last_seen or seen_at > indicator.last_seen:
-                indicator.last_seen = seen_at
+                    indicator = indicator_cache.get(key)
+                    if indicator is not None:
+                        to_process.append((indicator, record, False))
+                        continue
 
-            # Métadonnées brutes du collecteur (fusion avec l'existant)
-            if record.get("metadata"):
-                indicator.raw_metadata = {
-                    **(indicator.raw_metadata or {}),
-                    **record["metadata"],
-                }
+                    quality = check_quality(value, ioc_type)
+                    status = IndicatorStatus.whitelisted if quality.is_false_positive else IndicatorStatus.active
+                    indicator = Indicator(
+                        value=value,
+                        type=ioc_type,
+                        tlp=source.tlp,
+                        confidence=50,
+                        status=status,
+                        raw_metadata={"quality_reason": quality.reason} if quality.is_false_positive else None,
+                        source_id=source.id,
+                    )
+                    indicator.tags = []  # marque la collection comme deja chargee (vide) : evite un
+                                         # lazy-load reseau au premier acces a .tags plus bas
+                    session.add(indicator)
+                    indicator_cache[key] = indicator
+                    pending_new.append(indicator)
+                    to_process.append((indicator, record, True))
 
-            # Tags normalisés (relation many-to-many)
-            for tag_name in record.get("tag_names") or []:
-                attach_tag(session, indicator, tag_name)
+                # UN SEUL flush pour tout le lot de nouveaux indicateurs :
+                # SQLAlchemy regroupe les INSERT plutot que d'en envoyer un
+                # par enregistrement.
+                if pending_new:
+                    session.flush()
 
-            # Sighting
-            session.add(Sighting(
-                indicator_id=indicator.id,
-                seen_at=seen_at,
-                source_ref=source_name,
-                context=record.get("context") or {},
-            ))
+                # Passe 2 : mise a jour des champs + tags + sighting, main-
+                # tenant que tous les indicateurs du lot ont un id valide.
+                for indicator, record, created in to_process:
+                    seen_at = record.get("seen_at") or datetime.utcnow()
+
+                    if not indicator.first_seen or seen_at < indicator.first_seen:
+                        indicator.first_seen = seen_at
+                    if not indicator.last_seen or seen_at > indicator.last_seen:
+                        indicator.last_seen = seen_at
+
+                    if record.get("metadata"):
+                        indicator.raw_metadata = {
+                            **(indicator.raw_metadata or {}),
+                            **record["metadata"],
+                        }
+
+                    for tag_name in record.get("tag_names") or []:
+                        attach_tag(session, indicator, tag_name, tag_cache=tag_cache)
+
+                    session.add(Sighting(
+                        indicator_id=indicator.id,
+                        seen_at=seen_at,
+                        source_ref=source_name,
+                        context=record.get("context") or {},
+                    ))
+
+                    stats["created" if created else "updated"] += 1
+                    stats["sightings"] += 1
 
             session.commit()
-            stats["created" if created else "updated"] += 1
-            stats["sightings"] += 1
-
         except Exception as e:
-            session.rollback()
-            stats["errors"] += 1
-            logger.error(f"Erreur sur '{record.get('value', '?')}' : {e}")
+            stats["errors"] += len(chunk)
+            logger.error(f"[{source_name}] Erreur sur le lot {chunk_start}-{chunk_start+len(chunk)} : {e}")
+
+        done = min(chunk_start + CHUNK_SIZE, len(records))
+        logger.info(f"[{source_name}] {done}/{len(records)} traites...")
 
     return stats
