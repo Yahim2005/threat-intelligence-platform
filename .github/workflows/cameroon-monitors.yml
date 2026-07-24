@@ -24,6 +24,8 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run typosquat monitor
         run: python -m collectors.typosquat_monitor
+      - name: Run NRD monitor
+        run: python -m collectors.nrd_monitor
       - name: Run CT monitor
         run: python -m collectors.ct_monitor
         timeout-minutes: 20  # crt.sh est instable depuis plusieurs jours, on borne cette etape
