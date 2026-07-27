@@ -8,6 +8,9 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from app.models.base import Base
 # Importe TOUS les modèles — sinon Alembic ne les détecte pas
 from app.models.source import Source
@@ -21,6 +24,14 @@ from app.models.relationship import TIPRelationship
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# L'URL vient TOUJOURS de la variable d'environnement DATABASE_URL, jamais
+# d'alembic.ini en dur (incident de securite : un mot de passe Neon complet
+# est reste en clair dans ce fichier, commite et pousse sur un repo public).
+db_url = os.getenv("DATABASE_URL")
+if not db_url:
+    raise RuntimeError("DATABASE_URL introuvable dans l'environnement/.env")
+config.set_main_option("sqlalchemy.url", db_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
