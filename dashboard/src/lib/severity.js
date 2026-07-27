@@ -54,3 +54,12 @@ export function levelForRiskScore(score) {
   if (score >= 50) return 'medium'
   return 'low'
 }
+
+// Classe un score de confidence IOC (0-100) - seuils cohérents avec le
+// RiskBadge de Lookup.jsx : >=75 menace confirmée, >=40 suspect, sinon faible.
+export function levelForConfidence(score) {
+  if (score == null) return 'unknown'
+  if (score >= 75) return 'high'
+  if (score >= 40) return 'medium'
+  return 'low'
+}

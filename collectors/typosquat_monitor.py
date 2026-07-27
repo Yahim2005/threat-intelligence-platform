@@ -80,6 +80,8 @@ class TyposquatMonitor(BaseCollector):
                     [
                         "dnstwist", "--registered", "--format", "json",
                         "--threads", "128",
+                        "--dictionary", "data/dnstwist_dictionary.txt",
+                        "--tld", "data/dnstwist_tlds.txt",
                         domain,
                     ],
                     capture_output=True,

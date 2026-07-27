@@ -32,7 +32,7 @@ function Pill({ label, active, onClick }) {
 
 // ── Badge confidence ──────────────────────────────────────────────
 function ConfidenceBadge({ value }) {
-  if (value == null) return <span className="text-gray-300">—</span>
+  if (value == null) return <span className="text-gray-300">non renseigné</span>
   const color = value >= 75 ? 'text-red-600 bg-red-50' : value >= 50 ? 'text-amber-600 bg-amber-50' : 'text-gray-500 bg-gray-50'
   return (
     <div className="flex items-center gap-2">
