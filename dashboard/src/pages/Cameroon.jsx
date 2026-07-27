@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import {
   Shield, ChevronRight, Server, Globe2,
-  CheckCircle2, HelpCircle, X, ExternalLink, Flag,
+  CheckCircle2, HelpCircle, X, ExternalLink, Flag, XCircle, Info,
 } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -436,12 +436,25 @@ export default function Cameroon({ onOpenDetail, onNavigate }) {
             subtitle={inst.acronym ? `${inst.acronym} · ${CATEGORY_LABELS[inst.category] || inst.category}` : CATEGORY_LABELS[inst.category]}
             onClose={() => setDetailItem(null)}
           >
-            {inst.domain && (
-              <div className="flex items-center gap-2 mb-4 text-sm">
+            {inst.domain_status === 'not_found' ? (
+              <div className="flex items-center gap-2 mb-2 text-sm">
+                <XCircle size={14} className="text-red-400" />
+                <span className="text-red-500">
+                  {inst.domain ? `${inst.domain} (non retenu)` : 'Aucun domaine officiel identifié'}
+                </span>
+              </div>
+            ) : inst.domain && (
+              <div className="flex items-center gap-2 mb-2 text-sm">
                 {inst.domain_status === 'confirmed'
                   ? <CheckCircle2 size={14} className="text-emerald-500" />
                   : <HelpCircle size={14} className="text-amber-400" />}
                 <span className="font-mono text-gray-700">{inst.domain}</span>
+              </div>
+            )}
+            {inst.verification_note && (
+              <div className="flex items-start gap-2 mb-4 px-3 py-2.5 bg-[#faf8f5] rounded-xl">
+                <Info size={13} className="text-[#8b7355] shrink-0 mt-0.5" />
+                <p className="text-xs text-gray-600 leading-relaxed">{inst.verification_note}</p>
               </div>
             )}
             {inst.risk_score != null && (

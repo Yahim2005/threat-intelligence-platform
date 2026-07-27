@@ -1,7 +1,7 @@
 // src/components/cameroon/Shared.jsx
 // Composants réutilisés par Cameroon.jsx et les 4 pages dédiées
 // (classement institutions, typosquatting, surface d'attaque, institutions).
-import { Shield, Building2, Radio, Landmark, ChevronRight } from 'lucide-react'
+import { Shield, Building2, Radio, Landmark, ChevronRight, XCircle, CheckCircle2, HelpCircle } from 'lucide-react'
 import { SEVERITY, severityFor, levelForRiskScore } from '../../lib/severity'
 
 export const CATEGORY_LABELS = {
@@ -102,6 +102,36 @@ export function ExposedRankRow({ asset, onClick }) {
   )
 }
 
+export function DomainStatusBadge({ asset }) {
+  const status = asset.domain_status
+
+  if (status === 'not_found') {
+    return (
+      <div className="flex items-center gap-1.5 justify-end">
+        <XCircle size={12} className="text-red-400 shrink-0" />
+        <span className="text-xs text-red-400">domaine non retenu</span>
+      </div>
+    )
+  }
+  if (status === 'confirmed' && asset.domain) {
+    return (
+      <div className="flex items-center gap-1.5 justify-end">
+        <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+        <span className="text-xs font-mono text-gray-500">{asset.domain}</span>
+      </div>
+    )
+  }
+  if (asset.domain) {
+    return (
+      <div className="flex items-center gap-1.5 justify-end">
+        <HelpCircle size={12} className="text-amber-400 shrink-0" />
+        <span className="text-xs font-mono text-gray-500">{asset.domain}</span>
+      </div>
+    )
+  }
+  return <span className="text-xs text-gray-300 italic">domaine inconnu</span>
+}
+
 export function InstitutionRow({ asset, onClick }) {
   const Icon = CATEGORY_ICONS[asset.category] || Shield
   return (
@@ -120,11 +150,7 @@ export function InstitutionRow({ asset, onClick }) {
         </div>
       </div>
       <div className="shrink-0 text-right">
-        {asset.domain ? (
-          <span className="text-xs font-mono text-gray-500">{asset.domain}</span>
-        ) : (
-          <span className="text-xs text-gray-300 italic">domaine inconnu</span>
-        )}
+        <DomainStatusBadge asset={asset} />
       </div>
     </div>
   )

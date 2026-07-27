@@ -1,6 +1,6 @@
 // src/pages/CameroonInstitutions.jsx
 import { useEffect, useState, useMemo } from 'react'
-import { ArrowLeft, CheckCircle2, HelpCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, HelpCircle, XCircle, Info } from 'lucide-react'
 import { api } from '../api/client'
 import DetailModal from '../components/DetailModal'
 import { CATEGORY_LABELS, InstitutionRow } from '../components/cameroon/Shared'
@@ -89,8 +89,15 @@ export default function CameroonInstitutions({ onBack, onNavigate }) {
           subtitle={detailItem.acronym ? `${detailItem.acronym} · ${CATEGORY_LABELS[detailItem.category]}` : CATEGORY_LABELS[detailItem.category]}
           onClose={() => setDetailItem(null)}
         >
-          {detailItem.domain && (
-            <div className="flex items-center gap-2 mb-5 text-sm">
+          {detailItem.domain_status === 'not_found' ? (
+            <div className="flex items-center gap-2 mb-3 text-sm">
+              <XCircle size={14} className="text-red-400" />
+              <span className="text-red-500">
+                {detailItem.domain ? `${detailItem.domain} (non retenu)` : 'Aucun domaine officiel identifié'}
+              </span>
+            </div>
+          ) : detailItem.domain && (
+            <div className="flex items-center gap-2 mb-3 text-sm">
               {detailItem.domain_status === 'confirmed'
                 ? <CheckCircle2 size={14} className="text-emerald-500" />
                 : <HelpCircle size={14} className="text-amber-400" />}
@@ -98,6 +105,12 @@ export default function CameroonInstitutions({ onBack, onNavigate }) {
               <span className="text-xs text-gray-400">
                 {detailItem.domain_status === 'confirmed' ? '(vérifié)' : '(à confirmer)'}
               </span>
+            </div>
+          )}
+          {detailItem.verification_note && (
+            <div className="flex items-start gap-2 mb-5 px-3 py-2.5 bg-[#faf8f5] rounded-xl">
+              <Info size={13} className="text-[#8b7355] shrink-0 mt-0.5" />
+              <p className="text-xs text-gray-600 leading-relaxed">{detailItem.verification_note}</p>
             </div>
           )}
           {detailItem.asn && (
