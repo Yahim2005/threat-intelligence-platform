@@ -22,9 +22,9 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     sys.exit("❌  DATABASE_URL introuvable dans .env")
 
-EMAIL = os.getenv("cirt@antic.cm")
-PASSWORD = os.getenv("jesuisducirt")
-FULL_NAME = os.getenv("Admin Antic", "ANTIC CIRT Admin")
+EMAIL = os.getenv("ADMIN_EMAIL")
+PASSWORD = os.getenv("ADMIN_PASSWORD")
+FULL_NAME = os.getenv("ADMIN_FULL_NAME", "ANTIC CIRT Admin")
 
 if not EMAIL or not PASSWORD:
     sys.exit(

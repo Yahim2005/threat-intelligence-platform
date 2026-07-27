@@ -5,8 +5,8 @@ Usage : python scripts/debug_login.py
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-EMAIL = os.getenv("cirt@antic.cm")
-PASSWORD = os.getenv("jesuisducirt")
+EMAIL = os.getenv("ADMIN_EMAIL")
+PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 if not EMAIL or not PASSWORD:
     sys.exit(
