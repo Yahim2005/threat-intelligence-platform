@@ -193,3 +193,52 @@ export function CveDonut({ severity }) {
     </div>
   )
 }
+
+// Traduction des algorithmes de fuzzing dnstwist en libelles lisibles
+export const FUZZER_LABELS = {
+  addition: 'Ajout de caractère',
+  bitsquatting: 'Erreur binaire (bitsquatting)',
+  homoglyph: 'Caractère visuellement similaire',
+  hyphenation: 'Ajout de tiret',
+  insertion: 'Insertion de caractère',
+  omission: 'Omission de caractère',
+  repetition: 'Répétition de caractère',
+  replacement: 'Remplacement de caractère',
+  subdomain: 'Sous-domaine',
+  transposition: 'Inversion de caractères',
+  'vowel-swap': 'Substitution de voyelle',
+  various: 'Variante générique',
+  'tld-swap': 'Extension différente (TLD)',
+  dictionary: 'Mot-clé suspect ajouté',
+}
+
+export function TyposquatMetadata({ metadata }) {
+  if (!metadata) return null
+  const fuzzerLabel = FUZZER_LABELS[metadata.fuzzer] || metadata.fuzzer
+
+  return (
+    <div className="bg-[#faf8f5] rounded-xl p-3 mb-4 space-y-2 text-xs">
+      {metadata.fuzzer && (
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400">Type de variante</span>
+          <span className="font-medium text-[#8b7355]">{fuzzerLabel}</span>
+        </div>
+      )}
+      {metadata.dns_a?.length > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400">Résout vers</span>
+          <span className="font-mono text-gray-700">{metadata.dns_a.join(', ')}</span>
+        </div>
+      )}
+      {metadata.dns_mx?.length > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400">Serveur mail (MX)</span>
+          <span className="font-mono text-gray-700">{metadata.dns_mx.join(', ')}</span>
+        </div>
+      )}
+      {(!metadata.dns_a || metadata.dns_a.length === 0) && (
+        <p className="text-gray-400 italic">Domaine enregistré mais ne résout vers aucune IP active.</p>
+      )}
+    </div>
+  )
+}

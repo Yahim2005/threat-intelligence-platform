@@ -188,6 +188,8 @@ def _serialize_indicator(ind: Indicator) -> schemas.IndicatorResponse:
         ] if hasattr(ind, "attack_mappings") and ind.attack_mappings else [],
         geoip=geoip,
         score_breakdown=score_breakdown,
+        cameroon_relevance=ind.cameroon_relevance or 0,
+        metadata=ind.raw_metadata,
     )
 
 

@@ -4,7 +4,7 @@ import { ArrowLeft, ExternalLink, Flag } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import DetailModal from '../components/DetailModal'
-import { SeverityBadge, TyposquatRow } from '../components/cameroon/Shared'
+import { SeverityBadge, TyposquatRow, TyposquatMetadata } from '../components/cameroon/Shared'
 
 const PAGE_SIZE = 20
 
@@ -28,7 +28,7 @@ export default function CameroonTyposquat({ onBack, onOpenDetail }) {
     const tag = filter === 'confirmed' ? 'typosquat:confirmed' : 'typosquat:potential'
     api.indicators({ tag, page, page_size: PAGE_SIZE }).then(d => {
       const extractTarget = i => i.tags?.find(t => t.startsWith('typosquat:') && t !== 'typosquat:confirmed' && t !== 'typosquat:potential')?.replace('typosquat:', '')
-      setItems(d.items.map(i => ({ id: i.id, value: i.value, target_name: extractTarget(i), confirmed: filter === 'confirmed' })))
+      setItems(d.items.map(i => ({ id: i.id, value: i.value, target_name: extractTarget(i), confirmed: filter === 'confirmed', metadata: i.metadata })))
       setTotal(d.total)
     }).catch(console.error).finally(() => setLoading(false))
   }, [filter, page])
@@ -124,6 +124,7 @@ export default function CameroonTyposquat({ onBack, onOpenDetail }) {
               {detailItem.confirmed ? 'Signal fort : domaine cible distinctif' : 'Signal à vérifier : domaine cible court'}
             </span>
           </div>
+          <TyposquatMetadata metadata={detailItem.metadata} />
           {onOpenDetail && (
             <button
               onClick={() => { onOpenDetail(detailItem.value); setDetailItem(null) }}

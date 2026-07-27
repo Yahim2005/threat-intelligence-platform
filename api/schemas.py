@@ -23,6 +23,7 @@ class IndicatorResponse(BaseModel):
     geoip: Optional[GeoIPData] = None
     score_breakdown: Optional[dict] = None
     cameroon_relevance: int = 0
+    metadata: Optional[dict] = None
     model_config = {"from_attributes": True}
 
 

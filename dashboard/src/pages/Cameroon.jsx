@@ -13,7 +13,7 @@ import DetailModal from '../components/DetailModal'
 import { levelForRiskScore } from '../lib/severity'
 import {
   CATEGORY_LABELS, SeverityBadge, RiskGauge, InstitutionRankRow,
-  TyposquatRow, ExposedRankRow, InstitutionRow, CveDonut,
+  TyposquatRow, ExposedRankRow, InstitutionRow, CveDonut, TyposquatMetadata,
 } from '../components/cameroon/Shared'
 
 function QuickNav({ sections, active }) {
@@ -99,8 +99,8 @@ export default function Cameroon({ onOpenDetail, onNavigate }) {
       setInstitutionsRanked(ranked)
       setVulnSeverity(vs)
       const extractTarget = i => i.tags?.find(t => t.startsWith('typosquat:') && t !== 'typosquat:confirmed' && t !== 'typosquat:potential')?.replace('typosquat:', '')
-      setTyposquatConfirmed(confirmed.items.map(i => ({ id: i.id, value: i.value, target_name: extractTarget(i), confirmed: true })))
-      setTyposquatPotential(potential.items.map(i => ({ id: i.id, value: i.value, target_name: extractTarget(i), confirmed: false })))
+      setTyposquatConfirmed(confirmed.items.map(i => ({ id: i.id, value: i.value, target_name: extractTarget(i), confirmed: true, metadata: i.metadata })))
+      setTyposquatPotential(potential.items.map(i => ({ id: i.id, value: i.value, target_name: extractTarget(i), confirmed: false, metadata: i.metadata })))
       setInstitutions(allInst)
     }).catch(console.error).finally(() => setLoading(false))
   }, [])
@@ -506,12 +506,13 @@ export default function Cameroon({ onOpenDetail, onNavigate }) {
           subtitle={`cible : ${detailItem.data.target_name || 'non identifiée'}`}
           onClose={() => setDetailItem(null)}
         >
-          <div className="flex items-center gap-2 mb-5">
+          <div className="flex items-center gap-2 mb-4">
             <SeverityBadge level={detailItem.data.confirmed ? 'high' : 'medium'} />
             <span className="text-xs text-gray-400">
               {detailItem.data.confirmed ? 'Signal fort : domaine cible distinctif' : 'Signal à vérifier : domaine cible court'}
             </span>
           </div>
+          <TyposquatMetadata metadata={detailItem.data.metadata} />
           {onOpenDetail && (
             <button
               onClick={() => { onOpenDetail(detailItem.data.value); setDetailItem(null) }}

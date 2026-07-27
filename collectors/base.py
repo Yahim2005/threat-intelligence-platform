@@ -9,6 +9,7 @@ Le reste (boucle, persistance, logging, gestion du temps, retries réseau,
 journalisation des runs) est fourni par run() et http_get_with_retry().
 """
 import logging
+import sys
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -160,7 +161,7 @@ class BaseCollector(ABC):
         except Exception as e:
             logger.error(f"[{source_name}] Erreur fetch : {e}")
             finalize(RunStatus.failed, error=f"fetch: {e}")
-            return
+            sys.exit(1)
 
         # 2. Parsing
         try:
@@ -168,7 +169,7 @@ class BaseCollector(ABC):
         except Exception as e:
             logger.error(f"[{source_name}] Erreur parse : {e}")
             finalize(RunStatus.failed, error=f"parse: {e}")
-            return
+            sys.exit(1)
 
         logger.info(f"[{source_name}] {len(records)} records parsés")
 
@@ -179,7 +180,7 @@ class BaseCollector(ABC):
         except Exception as e:
             logger.error(f"[{source_name}] Erreur persistance : {e}")
             finalize(RunStatus.failed, error=f"persistence: {e}")
-            return
+            sys.exit(1)
         finally:
             session.close()
 
@@ -195,3 +196,16 @@ class BaseCollector(ABC):
             f"sightings: {stats['sightings']} | "
             f"erreurs: {stats['errors']}"
         )
+
+        # Echec total (rien cree, rien mis a jour, au moins une erreur) :
+        # un run resilient qui isole quelques mauvais enregistrements reste
+        # un succes normal, mais un echec a 100% doit etre visible (croix
+        # rouge sur GitHub Actions), pas une fausse coche verte silencieuse.
+        # C'est exactement ce qui s'est produit avec le quota Neon plein :
+        # 268 erreurs sur 268, jamais remarque faute de signal clair.
+        if stats["created"] == 0 and stats["updated"] == 0 and stats["errors"] > 0:
+            logger.error(
+                f"[{source_name}] Echec total : aucune donnee persistee sur "
+                f"{stats['errors']} enregistrement(s) traite(s)."
+            )
+            sys.exit(1)
