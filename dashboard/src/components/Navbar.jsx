@@ -1,5 +1,5 @@
 // src/components/Navbar.jsx
-import { Shield, LayoutDashboard, AlertTriangle, Database, Activity, BarChart2, MapPin } from 'lucide-react'
+import { Shield, LayoutDashboard, AlertTriangle, Database, Activity, BarChart2, MapPin, Settings } from 'lucide-react'
 
 const links = [
   { id: 'overview',   label: 'Overview',   icon: LayoutDashboard },
@@ -9,10 +9,11 @@ const links = [
   { id: 'analytics',  label: 'Analytics',  icon: BarChart2 },
   { id: 'sources',    label: 'Sources',    icon: Database },
   { id: 'health',     label: 'Health',     icon: Activity },
+  { id: 'admin',      label: 'Admin',      icon: Settings },
 ]
 
 export default function Navbar({ current, onChange, isAdmin }) {
-  const visibleLinks = links.filter(({ id }) => id !== 'health' || isAdmin)
+  const visibleLinks = links.filter(({ id }) => (id !== 'health' && id !== 'admin') || isAdmin)
 
   return (
     <aside

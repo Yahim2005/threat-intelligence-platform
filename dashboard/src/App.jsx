@@ -6,6 +6,7 @@ import Indicators      from './pages/Indicators'
 import Threats         from './pages/Threats'
 import Sources         from './pages/Sources'
 import Health          from './pages/Health'
+import Admin           from './pages/Admin'
 import Lookup          from './pages/Lookup'
 import IndicatorDetail from './pages/IndicatorDetail'
 import Login           from './pages/Login'
@@ -76,6 +77,7 @@ export default function App() {
     if (page === 'threats')       return <Threats onOpenThreat={openThreat} />
     if (page === 'sources')       return <Sources />
     if (page === 'health')        return isAdmin ? <Health /> : <AccessDenied />
+    if (page === 'admin')         return <Admin />
     if (page === 'analytics')     return <Analytics />
     if (page === 'cameroon')      return <Cameroon onOpenDetail={openDetail} onNavigate={navigate} />
     if (page === 'cameroon-institutions-rank') return <CameroonInstitutionsRank onBack={() => navigate('cameroon')} />
