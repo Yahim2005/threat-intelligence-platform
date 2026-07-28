@@ -50,7 +50,16 @@ def _fetch_exportable(
     )
     if ioc_type:
         q = q.filter(Indicator.type == ioc_type)
-    return q.order_by(Indicator.confidence.desc()).all()
+    else:
+        # Les CVE ne sont pas convertibles en objet STIX "indicator" (to_stix
+        # les rejette) : les exclure par defaut evite qu'un lot volumineux et
+        # regroupe physiquement en base (ex: import NVD massif) ne remonte en
+        # bloc et masque silencieusement tous les autres types au tri.
+        q = q.filter(Indicator.type != "cve")
+    # Tri secondaire stable : sans lui, des lignes a confidence identique
+    # (cas courant, la plupart des collecteurs assignent 50 par defaut)
+    # peuvent ressortir regroupees par bloc d'insertion plutot que melangees.
+    return q.order_by(Indicator.confidence.desc(), Indicator.created_at.desc()).all()
 
 
 # ─── Export STIX 2.1 ─────────────────────────────────────────────────────────

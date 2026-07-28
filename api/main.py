@@ -29,7 +29,7 @@ from sqlalchemy import text
 from app.database import SessionLocal
 from app.logger import setup_logging, get_logger
 from app.models import Indicator
-from api import queries, schemas, exports
+from api import queries, schemas, exports, taxii
 
 # ─── Logging : doit être configuré en premier ─────────────────────────────────
 
@@ -77,6 +77,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(exports.router)
+app.include_router(taxii.router)
 
 
 # ─── Middleware : log + métriques de chaque requête ───────────────────────────
