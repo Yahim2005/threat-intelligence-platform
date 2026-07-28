@@ -256,6 +256,140 @@ function EditModal({ asset, onClose, onSaved }) {
   )
 }
 
+const JOB_GROUPS = [
+  {
+    label: 'Sources généralistes',
+    jobs: [
+      { name: 'urlhaus', label: 'URLhaus' },
+      { name: 'feodo', label: 'Feodo Tracker' },
+      { name: 'threatfox', label: 'ThreatFox' },
+      { name: 'spamhaus', label: 'Spamhaus DROP' },
+      { name: 'cisa_kev', label: 'CISA KEV' },
+      { name: 'tor_exit', label: 'Tor Exit Nodes' },
+      { name: 'otx', label: 'AlienVault OTX' },
+      { name: 'otx_africa', label: 'AlienVault OTX Africa' },
+      { name: 'openphish', label: 'OpenPhish' },
+      { name: 'malwarebazaar', label: 'MalwareBazaar' },
+      { name: 'nvd', label: 'NVD (CVE)' },
+    ],
+  },
+  {
+    label: 'Surveillance nationale',
+    jobs: [
+      { name: 'typosquat_monitor', label: 'Typosquat Monitor' },
+      { name: 'nrd_monitor', label: 'Domaines nouvellement enregistrés' },
+      { name: 'ct_monitor', label: 'Certificate Transparency (crt.sh)' },
+    ],
+  },
+  {
+    label: 'Post-traitement',
+    jobs: [
+      { name: 'run_correlation', label: 'Corrélation (relations entre IOCs)' },
+      { name: 'run_clustering', label: 'Clustering (clusters de menaces)' },
+      { name: 'recalculate_scores', label: 'Recalcul des scores de confiance' },
+    ],
+  },
+]
+
+function timeAgo(iso) {
+  if (!iso) return null
+  const diffMs = Date.now() - new Date(iso + 'Z').getTime()
+  const mins = Math.round(diffMs / 60000)
+  if (mins < 1) return 'à l\'instant'
+  if (mins < 60) return `il y a ${mins} min`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `il y a ${hours}h`
+  return `il y a ${Math.round(hours / 24)}j`
+}
+
+function JobRow({ job, jobsByName, onRun, running }) {
+  const info = jobsByName[job.name]
+  const lastRun = info?.last_run
+  const isRunning = running === job.name
+
+  let statusBadge = <span className="text-xs text-gray-300 italic">jamais lancé</span>
+  if (lastRun) {
+    const styles = {
+      success: 'bg-emerald-50 text-emerald-600',
+      partial: 'bg-amber-50 text-amber-600',
+      failed: 'bg-red-50 text-red-500',
+      running: 'bg-blue-50 text-blue-500',
+    }
+    const labels = { success: 'succès', partial: 'partiel', failed: 'échec', running: 'en cours' }
+    statusBadge = (
+      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${styles[lastRun.status] || styles.running}`}>
+        {labels[lastRun.status] || lastRun.status} · {timeAgo(lastRun.started_at)}
+      </span>
+    )
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 border-b border-[#faf8f5] last:border-0">
+      <div className="min-w-0">
+        <p className="text-sm text-gray-700">{job.label}</p>
+        <div className="mt-0.5">{statusBadge}</div>
+      </div>
+      <button
+        onClick={() => onRun(job.name)}
+        disabled={isRunning}
+        className="shrink-0 px-3 py-1.5 text-xs font-medium bg-[#8b7355] text-white rounded-lg hover:bg-[#6b5740] disabled:opacity-50 transition-colors"
+      >
+        {isRunning ? 'Lancé…' : 'Lancer'}
+      </button>
+    </div>
+  )
+}
+
+function JobsPanel() {
+  const [jobs, setJobs] = useState([])
+  const [running, setRunning] = useState(null)
+  const [message, setMessage] = useState(null)
+
+  function load() {
+    api.listAdminJobs().then(setJobs).catch(console.error)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const jobsByName = useMemo(() => Object.fromEntries(jobs.map(j => [j.job_name, j])), [jobs])
+
+  async function handleRun(name) {
+    setRunning(name)
+    setMessage(null)
+    try {
+      await api.runAdminJob(name)
+      setMessage({ type: 'ok', text: `Job "${name}" lancé en arrière-plan.` })
+      setTimeout(load, 3000)
+    } catch (e) {
+      setMessage({ type: 'error', text: e.message })
+    } finally {
+      setTimeout(() => setRunning(null), 1500)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {message && (
+        <div className={`px-4 py-2.5 rounded-xl text-sm ${message.type === 'ok' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+          {message.text}
+        </div>
+      )}
+      <p className="text-xs text-gray-400 -mt-1">
+        Les collecteurs tournent en arrière-plan (de quelques secondes à ~40 min pour le typosquat monitor).
+        Le statut se met à jour automatiquement une fois terminé — rafraîchissez la page pour vérifier.
+      </p>
+      {JOB_GROUPS.map(group => (
+        <div key={group.label} className="bg-white rounded-2xl border border-[#ede8e3] p-4">
+          <h3 className="text-xs font-semibold text-[#8b7355] uppercase mb-2">{group.label}</h3>
+          {group.jobs.map(job => (
+            <JobRow key={job.name} job={job} jobsByName={jobsByName} onRun={handleRun} running={running} />
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Admin() {
   const { isAdmin } = useAuth()
   const [assets, setAssets] = useState([])
@@ -265,6 +399,7 @@ export default function Admin() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [editing, setEditing] = useState(null) // null | 'new' | asset object
+  const [tab, setTab] = useState('institutions') // 'institutions' | 'jobs'
 
   function load() {
     setLoading(true)
@@ -303,14 +438,34 @@ export default function Admin() {
             {assets.length} institutions au total, {assets.filter(a => a.active !== false).length} actives
           </p>
         </div>
-        <button
-          onClick={() => setEditing('new')}
-          className="flex items-center gap-1.5 px-4 py-2 bg-[#8b7355] text-white text-sm rounded-xl hover:bg-[#6b5740] transition-colors"
-        >
-          <Plus size={14} /> Nouvelle institution
-        </button>
+        {tab === 'institutions' && (
+          <button
+            onClick={() => setEditing('new')}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#8b7355] text-white text-sm rounded-xl hover:bg-[#6b5740] transition-colors"
+          >
+            <Plus size={14} /> Nouvelle institution
+          </button>
+        )}
       </div>
 
+      <div className="flex gap-2">
+        {[{ v: 'institutions', l: 'Référentiel' }, { v: 'jobs', l: 'Collecte & traitement' }].map(({ v, l }) => (
+          <button
+            key={v}
+            onClick={() => setTab(v)}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              tab === v ? 'bg-[#2c1810] text-white' : 'bg-white text-gray-500 border border-[#ede8e3] hover:border-[#c4a882]'
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'jobs' && <JobsPanel />}
+
+      {tab === 'institutions' && (
+      <>
       <div className="bg-white rounded-2xl border border-[#ede8e3] p-4 space-y-3">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -399,6 +554,8 @@ export default function Admin() {
             Suivant <ChevronRight size={14} />
           </button>
         </div>
+      )}
+      </>
       )}
 
       {editing && (

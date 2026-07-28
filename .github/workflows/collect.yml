@@ -8,7 +8,7 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 55  # marge augmentee : 9 collecteurs + correlation + clustering + recalcul de scores
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -43,4 +43,8 @@ jobs:
           python -m collectors.malwarebazaar
 
       - name: Run correlation
-        run: python -m core.correlation
+        run: python -m scripts.run_correlation
+      - name: Run clustering
+        run: python -m scripts.run_clustering
+      - name: Recalculate confidence scores
+        run: python -m scripts.recalculate_scores

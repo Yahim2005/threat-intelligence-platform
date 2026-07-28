@@ -725,6 +725,7 @@ ADMIN_JOBS = {
     "ct_monitor": "collectors.ct_monitor",
     "run_correlation": "scripts.run_correlation",
     "run_clustering": "scripts.run_clustering",
+    "recalculate_scores": "scripts.recalculate_scores",
 }
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
