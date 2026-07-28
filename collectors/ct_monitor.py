@@ -45,6 +45,13 @@ logger = logging.getLogger(__name__)
 CRTSH_URL = "https://crt.sh/"
 REQUEST_DELAY = 2.0  # secondes entre requêtes — politesse envers un service déjà fragile
 
+MIN_KEYWORD_LENGTH = 5  # en dessous, trop de collisions statistiques (ex: "art", "sic")
+# Mots plus longs que le seuil ci-dessus mais neanmoins trop generiques pour une
+# recherche par sous-chaine fiable (mot du dictionnaire et/ou marque mondiale
+# sans rapport avec le Cameroun). Liste non-exhaustive, a completer au cas par cas
+# quand un nouveau faux positif massif est repere.
+GENERIC_KEYWORD_STOPLIST = {"orange", "cameroon", "national", "central", "digital"}
+
 
 class CTMonitor(BaseCollector):
 
@@ -74,7 +81,10 @@ class CTMonitor(BaseCollector):
 
         results = []
         for i, target in enumerate(targets, 1):
-            label = target["domain"].split(".")[0]
+            label = target["domain"].split(".")[0].lower()
+            if len(label) < MIN_KEYWORD_LENGTH or label in GENERIC_KEYWORD_STOPLIST:
+                logger.info(f"  Ignore (mot-cle trop generique) : {target['domain']} ({label})")
+                continue
             if i % 10 == 0:
                 logger.info(f"  crt.sh {i}/{len(targets)}…")
 

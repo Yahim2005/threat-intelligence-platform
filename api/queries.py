@@ -11,6 +11,7 @@ from app.models.monitored_asset import MonitoredAsset
 from app.models.exposed_asset import ExposedAsset
 from app.models.enums import DomainStatus
 from app.models.enums import TLPLevel
+from app.models.enums import IndicatorStatus
 
 
 # ─── Indicators ──────────────────────────────────────────────────────────────
@@ -785,6 +786,7 @@ def get_institutions_ranked(session: Session) -> list[dict]:
         .join(Indicator.tags)
         .filter(Tag.name.like("typosquat:%") | Tag.name.like("ct:%"))
         .filter(Tag.name.notin_(["typosquat:confirmed", "typosquat:potential", "ct:confirmed", "ct:potential"]))
+        .filter(Indicator.status == IndicatorStatus.active)  # exclut les faux positifs whitelistes (ex: bruit "art"/"orange")
         .group_by(Tag.name)
         .all()
     )
