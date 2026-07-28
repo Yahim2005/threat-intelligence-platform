@@ -12,6 +12,8 @@ from app.models.enums import UserRole
 from app.security import hash_password, verify_password, create_access_token
 from api.auth import get_current_user, require_admin
 import time
+import subprocess
+from pathlib import Path
 from collections import defaultdict
 from typing import Optional
 
@@ -699,3 +701,89 @@ def get_top_ports_route(
 ):
     """Ports les plus fréquemment exposés sur la surface d'attaque."""
     return [schemas.PortCountResponse(**r) for r in queries.get_top_exposed_ports(db, limit=limit)]
+
+
+# ─── Routes : Administration (declenchement manuel de jobs) ───────────────────
+# Liste blanche stricte : jamais de commande construite depuis une entree
+# utilisateur. Seuls ces noms de jobs, mappes vers un module Python fixe,
+# peuvent etre declenches.
+ADMIN_JOBS = {
+    "urlhaus": "collectors.urlhaus",
+    "feodo": "collectors.feodo",
+    "threatfox": "collectors.threatfox",
+    "spamhaus": "collectors.spamhaus",
+    "cisa_kev": "collectors.cisa_kev",
+    "tor_exit": "collectors.tor_exit",
+    "otx": "collectors.otx",
+    "otx_africa": "collectors.otx_africa",
+    "openphish": "collectors.openphish",
+    "malwarebazaar": "collectors.malwarebazaar",
+    "nvd": "collectors.nvd",
+    "typosquat_monitor": "collectors.typosquat_monitor",
+    "nrd_monitor": "collectors.nrd_monitor",
+    "ct_monitor": "collectors.ct_monitor",
+    "run_correlation": "scripts.run_correlation",
+    "run_clustering": "scripts.run_clustering",
+}
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+@app.get("/admin/jobs", tags=["Admin"])
+def list_admin_jobs(user: User = Depends(require_admin)):
+    """Liste les jobs declenchables manuellement, avec le statut de leur
+    derniere execution connue (via collection_runs pour les collecteurs)."""
+    session = SessionLocal()
+    try:
+        results = []
+        for job_name, module_path in ADMIN_JOBS.items():
+            last_run = None
+            if module_path.startswith("collectors."):
+                row = session.execute(text("""
+                    SELECT cr.status, cr.started_at, cr.finished_at,
+                           cr.items_created, cr.items_updated, cr.items_errors
+                    FROM collection_runs cr
+                    JOIN sources s ON s.id = cr.source_id
+                    JOIN (
+                        SELECT DISTINCT ON (source_id) *
+                        FROM collection_runs
+                        ORDER BY source_id, started_at DESC
+                    ) latest ON latest.id = cr.id
+                    WHERE s.name ILIKE :pattern
+                    LIMIT 1
+                """), {"pattern": f"%{module_path.split('.')[-1]}%"}).fetchone()
+                if row:
+                    last_run = {
+                        "status": row[0], "started_at": str(row[1]), "finished_at": str(row[2]) if row[2] else None,
+                        "created": row[3], "updated": row[4], "errors": row[5],
+                    }
+            results.append({"job_name": job_name, "type": "collector" if module_path.startswith("collectors.") else "post-processing", "last_run": last_run})
+        return results
+    finally:
+        session.close()
+
+
+@app.post("/admin/jobs/{job_name}/run", tags=["Admin"])
+@limiter.limit("10/minute")
+def run_admin_job(job_name: str, request: Request, user: User = Depends(require_admin)):
+    """Declenche un job en arriere-plan (collecteur ou post-traitement).
+    Ne bloque pas la reponse HTTP : le job tourne independamment, son statut
+    se consulte ensuite via GET /admin/jobs (collecteurs) ou les logs serveur
+    (correlation/clustering)."""
+    if job_name not in ADMIN_JOBS:
+        raise HTTPException(status_code=404, detail=f"Job inconnu : {job_name}")
+
+    module_path = ADMIN_JOBS[job_name]
+    try:
+        subprocess.Popen(
+            ["python", "-m", module_path],
+            cwd=str(REPO_ROOT),
+            env=_os.environ.copy(),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Impossible de lancer le job : {e}")
+
+    return {"message": f"Job '{job_name}' lance en arriere-plan.", "module": module_path}
