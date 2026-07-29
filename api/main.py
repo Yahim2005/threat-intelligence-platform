@@ -20,8 +20,6 @@ from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -30,6 +28,7 @@ from app.database import SessionLocal
 from app.logger import setup_logging, get_logger
 from app.models import Indicator
 from api import queries, schemas, exports, taxii
+from api.rate_limit import limiter, rate_limit_exceeded_handler
 
 # ─── Logging : doit être configuré en premier ─────────────────────────────────
 
@@ -37,9 +36,9 @@ setup_logging(log_level="INFO")
 logger = get_logger("api")
 
 # ─── Rate limiter ─────────────────────────────────────────────────────────────
-# get_remote_address : identifie chaque client par son IP
-
-limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+# `limiter` vit dans api/rate_limit.py (voir ce module pour le pourquoi) --
+# key_func=get_remote_address par défaut, sauf sur /export/* et /taxii2/*
+# qui l'overrident avec api_client_key (rate limit par organisme, pas par IP).
 
 # ─── Métriques en mémoire ─────────────────────────────────────────────────────
 # Simple dict de compteurs — remis à zéro au redémarrage.
@@ -63,7 +62,7 @@ app = FastAPI(
 
 # Branche le handler d'erreur 429 de slowapi sur l'app
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 
 # ─── CORS ────────────────────────────────────────────────────────────────────

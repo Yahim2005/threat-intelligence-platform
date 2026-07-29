@@ -5,7 +5,7 @@ import csv
 import io
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -14,11 +14,17 @@ from app.models import Indicator
 from app.models.api_client import ApiClient
 from app.models.enums import IndicatorStatus
 from api.auth import get_api_key
+from api.rate_limit import client_limiter
 from core.stix import to_stix
 import stix2
-import json 
+import json
 
 router = APIRouter(prefix="/export", tags=["Exports"])
+
+# 20/minute par organisme (clé API) : ces exports scannent toute la table
+# Indicator à chaque appel (voir _fetch_exportable) -- un usage légitime est
+# un cron horaire/quotidien, pas un polling serré. Rate limit par identité de
+# clé API (pas par IP) : voir api/rate_limit.py.
 
 
 # ─── Dépendance DB ───────────────────────────────────────────────────────────
@@ -83,7 +89,9 @@ def _fetch_exportable(
 # ─── Export STIX 2.1 ─────────────────────────────────────────────────────────
 
 @router.get("/stix", summary="Exporter un bundle STIX 2.1")
+@client_limiter.limit("20/minute")
 def export_stix(
+    request: Request,
     type: Optional[str] = Query(None, description="Filtrer par type d'IOC"),
     confidence_min: int = Query(50, ge=0, le=100, description="Confidence minimum"),
     db: Session = Depends(get_db),
@@ -118,7 +126,9 @@ def export_stix(
 # ─── Export CSV ──────────────────────────────────────────────────────────────
 
 @router.get("/csv", summary="Exporter les indicateurs en CSV")
+@client_limiter.limit("20/minute")
 def export_csv(
+    request: Request,
     type: Optional[str] = Query(None, description="Filtrer par type d'IOC"),
     confidence_min: int = Query(50, ge=0, le=100, description="Confidence minimum"),
     db: Session = Depends(get_db),
@@ -161,7 +171,9 @@ def export_csv(
 # ─── Export Blocklist ────────────────────────────────────────────────────────
 
 @router.get("/blocklist", summary="Exporter une blocklist opérationnelle")
+@client_limiter.limit("20/minute")
 def export_blocklist(
+    request: Request,
     type: Optional[str] = Query(None, description="Filtrer par type : ip, domain, url"),
     confidence_min: int = Query(70, ge=0, le=100, description="Confidence minimum (défaut 70)"),
     db: Session = Depends(get_db),

@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import tuple_
 from sqlalchemy.orm import Session
@@ -34,12 +34,20 @@ from app.models import Indicator
 from app.models.api_client import ApiClient
 from api.auth import get_api_key
 from api.exports import _exportable_base_query
+from api.rate_limit import client_limiter
 from core.stix import to_stix
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/taxii2", tags=["TAXII"])
+
+# Rate limit par organisme (clé API), pas par IP -- voir api/rate_limit.py.
+# Deux paliers : les routes de "bootstrap" (discovery/collections, appelées
+# une poignée de fois par synchro) restent à 30/minute ; /objects et
+# /manifest, le coeur de la pagination, montent à 120/minute pour ne pas
+# gêner une synchro légitime qui enchaîne les pages (ex: ~54 requêtes pour
+# parcourir 26 000+ IOCs par lots de 500 -- largement sous 120/minute).
 
 TAXII_MEDIA_TYPE = "application/taxii+json;version=2.1"
 STIX_MEDIA_TYPE = "application/stix+json;version=2.1"
@@ -140,7 +148,8 @@ def _paginated_indicators(
 
 
 @router.get("/", summary="TAXII Discovery")
-def discovery(_client: ApiClient | None = Depends(get_api_key)):
+@client_limiter.limit("30/minute")
+def discovery(request: Request, _client: ApiClient | None = Depends(get_api_key)):
     """Point d'entree TAXII : liste les API roots disponibles."""
     return _taxii_response({
         "title": "TIP ANTIC/CIRT Cameroun",
@@ -151,7 +160,8 @@ def discovery(_client: ApiClient | None = Depends(get_api_key)):
 
 
 @router.get("/api", summary="TAXII API Root")
-def api_root(_client: ApiClient | None = Depends(get_api_key)):
+@client_limiter.limit("30/minute")
+def api_root(request: Request, _client: ApiClient | None = Depends(get_api_key)):
     """Decrit les capacites de cet API root."""
     return _taxii_response({
         "title": "TIP - API Root",
@@ -162,19 +172,23 @@ def api_root(_client: ApiClient | None = Depends(get_api_key)):
 
 
 @router.get("/api/collections", summary="Lister les collections")
-def list_collections(_client: ApiClient | None = Depends(get_api_key)):
+@client_limiter.limit("30/minute")
+def list_collections(request: Request, _client: ApiClient | None = Depends(get_api_key)):
     return _taxii_response({"collections": [_collection_descriptor()]})
 
 
 @router.get("/api/collections/{collection_id}", summary="Detail d'une collection")
-def get_collection(collection_id: str, _client: ApiClient | None = Depends(get_api_key)):
+@client_limiter.limit("30/minute")
+def get_collection(request: Request, collection_id: str, _client: ApiClient | None = Depends(get_api_key)):
     if collection_id != COLLECTION_ID:
         return _taxii_response({"title": "Collection introuvable"}, status_code=404)
     return _taxii_response(_collection_descriptor())
 
 
 @router.get("/api/collections/{collection_id}/objects", summary="Recuperer les objets STIX")
+@client_limiter.limit("120/minute")
 def get_objects(
+    request: Request,
     collection_id: str,
     limit: int = Query(500, ge=1, le=2000),
     type: Optional[str] = Query(None, description="Filtrer par type d'objet STIX, ex: indicator"),
@@ -217,7 +231,9 @@ def get_objects(
 
 
 @router.get("/api/collections/{collection_id}/manifest", summary="Manifeste (metadonnees seules)")
+@client_limiter.limit("120/minute")
 def get_manifest(
+    request: Request,
     collection_id: str,
     limit: int = Query(500, ge=1, le=2000),
     confidence_min: int = Query(50, ge=0, le=100),
