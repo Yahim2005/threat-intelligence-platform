@@ -315,3 +315,25 @@ class SectorBreakdownResponse(BaseModel):
 class PortCountResponse(BaseModel):
     port: int
     count: int
+
+
+# ─── Clients API (organismes partenaires) ────────────────────────────────────
+
+class ApiClientCreate(BaseModel):
+    name: str
+    contact_email: Optional[str] = None
+
+
+class ApiClientResponse(BaseModel):
+    id: str
+    name: str
+    contact_email: Optional[str]
+    is_active: bool
+    created_at: datetime
+    last_used_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+class ApiClientCreateResponse(ApiClientResponse):
+    api_key: str

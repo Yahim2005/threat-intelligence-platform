@@ -16,7 +16,6 @@ Usage :
 """
 from __future__ import annotations
 import argparse
-import secrets
 import sys
 from pathlib import Path
 
@@ -25,23 +24,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from dotenv import load_dotenv
 load_dotenv()
 
+from app.api_clients import create_api_client
 from app.database import SessionLocal
 from app.models.api_client import ApiClient
-from api.auth import _hash_key
 
 
 def cmd_create(args: argparse.Namespace) -> None:
-    raw_key = f"tip_{secrets.token_hex(24)}"
-    client = ApiClient(
-        name=args.name,
-        contact_email=args.contact,
-        key_hash=_hash_key(raw_key),
-        key_prefix=raw_key[:12],
-    )
     with SessionLocal() as db:
-        db.add(client)
-        db.commit()
-        db.refresh(client)
+        client, raw_key = create_api_client(db, name=args.name, contact_email=args.contact)
 
     print(f"✅  Client créé : {client.name}  (id={client.id})")
     print()

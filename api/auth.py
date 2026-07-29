@@ -1,6 +1,5 @@
 # api/auth.py
 
-import hashlib
 import os
 from datetime import datetime
 from uuid import UUID
@@ -9,6 +8,7 @@ from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.api_clients import hash_api_key as _hash_key
 from app.database import SessionLocal
 from app.models.api_client import ApiClient
 from app.models.user import User
@@ -26,10 +26,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-def _hash_key(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()
 
 
 def get_api_key(

@@ -3,7 +3,7 @@
 // pour permettre a une equipe non technique de gerer les institutions
 // surveillees sans passer par des scripts Python en ligne de commande.
 import { useEffect, useState, useMemo } from 'react'
-import { Plus, X, Search, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { Plus, X, Search, ChevronLeft, ChevronRight, Trash2, Copy, AlertTriangle } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
@@ -390,6 +390,255 @@ function JobsPanel() {
   )
 }
 
+function NewApiClientModal({ onClose, onCreated }) {
+  const [name, setName] = useState('')
+  const [contact, setContact] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function submit() {
+    if (!name.trim()) {
+      setError('Le nom de l\'organisme est obligatoire.')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      const result = await api.createApiClient({ name: name.trim(), contact_email: contact.trim() || null })
+      onCreated(result)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#ede8e3]">
+          <h2 className="text-base font-bold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            Nouveau partenaire API
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-50">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Nom de l'organisme *</label>
+            <input
+              type="text" value={name} placeholder="ex: CIRT Sénégal"
+              onChange={e => setName(e.target.value)}
+              className="w-full text-sm border border-[#ede8e3] rounded-lg px-3 py-2 bg-[#faf8f5] focus:outline-none focus:border-[#c4a882]"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Email de contact</label>
+            <input
+              type="email" value={contact} placeholder="soc@organisme.example"
+              onChange={e => setContact(e.target.value)}
+              className="w-full text-sm border border-[#ede8e3] rounded-lg px-3 py-2 bg-[#faf8f5] focus:outline-none focus:border-[#c4a882]"
+            />
+          </div>
+          {error && (
+            <div className="px-3 py-2 bg-red-50 text-red-600 text-xs rounded-lg">{error}</div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 border border-[#ede8e3] rounded-lg hover:bg-gray-50">
+              Annuler
+            </button>
+            <button
+              onClick={submit} disabled={saving}
+              className="px-4 py-2 text-sm bg-[#8b7355] text-white rounded-lg hover:bg-[#6b5740] disabled:opacity-60"
+            >
+              {saving ? 'Création…' : 'Créer'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ApiKeyRevealModal({ client, onClose }) {
+  const [copied, setCopied] = useState(false)
+
+  function copy() {
+    navigator.clipboard.writeText(client.api_key).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  // Pas de fermeture au clic sur le fond : la clé ne sera plus jamais
+  // affichée, on évite qu'un clic accidentel la fasse disparaître avant copie.
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="px-6 py-4 border-b border-[#ede8e3]">
+          <h2 className="text-base font-bold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            Partenaire créé : {client.name}
+          </h2>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div className="flex items-start gap-2 px-3 py-2.5 bg-amber-50 text-amber-700 text-xs rounded-lg">
+            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+            <span>
+              Cette clé ne sera <strong>plus jamais affichée</strong>. Copiez-la maintenant
+              et transmettez-la au partenaire par un canal sécurisé.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs font-mono px-3 py-2.5 bg-[#faf8f5] border border-[#ede8e3] rounded-lg break-all">
+              {client.api_key}
+            </code>
+            <button
+              onClick={copy}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-2.5 bg-[#8b7355] text-white text-xs rounded-lg hover:bg-[#6b5740] transition-colors"
+            >
+              <Copy size={13} /> {copied ? 'Copié !' : 'Copier'}
+            </button>
+          </div>
+          <div className="flex justify-end pt-2">
+            <button onClick={onClose} className="px-4 py-2 text-sm bg-[#2c1810] text-white rounded-lg hover:opacity-90">
+              J'ai copié la clé, fermer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ApiClientRow({ client, onRevoke, revoking }) {
+  const isRevoking = revoking === client.id
+  return (
+    <tr className="border-b border-[#faf8f5] last:border-0">
+      <td className="px-4 py-3">
+        <p className="font-medium text-gray-800">{client.name}</p>
+        <p className="text-xs text-gray-400">{client.contact_email || 'sans contact'}</p>
+      </td>
+      <td className="px-4 py-3">
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+          client.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
+        }`}>
+          {client.is_active ? 'actif' : 'révoqué'}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-xs text-gray-500">
+        {client.last_used_at ? timeAgo(client.last_used_at) : <span className="italic text-gray-300">jamais utilisée</span>}
+      </td>
+      <td className="px-4 py-3 text-xs text-gray-400">{timeAgo(client.created_at)}</td>
+      <td className="px-4 py-3 text-right">
+        {client.is_active && (
+          <button
+            onClick={() => onRevoke(client)}
+            disabled={isRevoking}
+            className="ml-auto flex items-center gap-1 px-2.5 py-1 text-xs text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+          >
+            <Trash2 size={12} /> {isRevoking ? 'Révocation…' : 'Révoquer'}
+          </button>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+function ApiClientsPanel() {
+  const [clients, setClients] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [newKeyResult, setNewKeyResult] = useState(null)
+  const [revoking, setRevoking] = useState(null)
+  const [message, setMessage] = useState(null)
+
+  function load() {
+    setLoading(true)
+    api.listApiClients().then(setClients).catch(console.error).finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [])
+
+  function handleCreated(result) {
+    setCreating(false)
+    setNewKeyResult(result)
+    load()
+  }
+
+  async function handleRevoke(client) {
+    if (!window.confirm(`Révoquer l'accès de "${client.name}" ? Cette action est irréversible : le partenaire ne pourra plus interroger l'API avec cette clé.`)) return
+    setRevoking(client.id)
+    setMessage(null)
+    try {
+      await api.revokeApiClient(client.id)
+      setMessage({ type: 'ok', text: `Accès révoqué pour ${client.name}.` })
+      load()
+    } catch (e) {
+      setMessage({ type: 'error', text: e.message })
+    } finally {
+      setRevoking(null)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-gray-400">
+          Chaque organisme partenaire (CIRT régional, SIEM, pare-feu) reçoit sa propre clé pour
+          interroger /export/* et /taxii2/*, révocable indépendamment sans affecter les autres.
+        </p>
+        <button
+          onClick={() => setCreating(true)}
+          className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-[#8b7355] text-white text-sm rounded-xl hover:bg-[#6b5740] transition-colors"
+        >
+          <Plus size={14} /> Nouveau partenaire
+        </button>
+      </div>
+
+      {message && (
+        <div className={`px-4 py-2.5 rounded-xl text-sm ${message.type === 'ok' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl border border-[#ede8e3] overflow-hidden">
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-6 h-6 border-2 border-[#c4a882] border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : clients.length === 0 ? (
+          <p className="text-sm text-gray-400 italic py-12 text-center">Aucun partenaire enregistré.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#f5f0eb] bg-[#faf8f5]">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[#8b7355] uppercase">Organisme</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[#8b7355] uppercase">Statut</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[#8b7355] uppercase">Dernière utilisation</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[#8b7355] uppercase">Créé</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {clients.map(c => (
+                <ApiClientRow key={c.id} client={c} onRevoke={handleRevoke} revoking={revoking} />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {creating && (
+        <NewApiClientModal onClose={() => setCreating(false)} onCreated={handleCreated} />
+      )}
+      {newKeyResult && (
+        <ApiKeyRevealModal client={newKeyResult} onClose={() => setNewKeyResult(null)} />
+      )}
+    </div>
+  )
+}
+
 export default function Admin() {
   const { isAdmin } = useAuth()
   const [assets, setAssets] = useState([])
@@ -449,7 +698,7 @@ export default function Admin() {
       </div>
 
       <div className="flex gap-2">
-        {[{ v: 'institutions', l: 'Référentiel' }, { v: 'jobs', l: 'Collecte & traitement' }].map(({ v, l }) => (
+        {[{ v: 'institutions', l: 'Référentiel' }, { v: 'jobs', l: 'Collecte & traitement' }, { v: 'api-clients', l: 'Partenaires API' }].map(({ v, l }) => (
           <button
             key={v}
             onClick={() => setTab(v)}
@@ -463,6 +712,8 @@ export default function Admin() {
       </div>
 
       {tab === 'jobs' && <JobsPanel />}
+
+      {tab === 'api-clients' && <ApiClientsPanel />}
 
       {tab === 'institutions' && (
       <>
