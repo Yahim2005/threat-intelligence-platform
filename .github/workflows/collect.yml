@@ -8,7 +8,7 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 55  # marge augmentee : 9 collecteurs + correlation + clustering + recalcul de scores
+    timeout-minutes: 75  # marge augmentee : 9 collecteurs + correlation + clustering + recalcul de scores + peremption (decay)
 
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -48,3 +48,5 @@ jobs:
         run: python -m scripts.run_clustering
       - name: Recalculate confidence scores
         run: python -m scripts.recalculate_scores
+      - name: Apply temporal decay (expire stale indicators)
+        run: python -m scripts.run_decay

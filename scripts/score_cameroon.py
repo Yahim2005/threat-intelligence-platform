@@ -40,9 +40,6 @@ logger = logging.getLogger("score_cameroon")
 CITY_DB  = Path(__file__).resolve().parent.parent / "data" / "GeoLite2-City.mmdb"
 ASN_DB   = Path(__file__).resolve().parent.parent / "data" / "GeoLite2-ASN.mmdb"
 
-# ASN d'opérateurs camerounais
-CAMEROON_ASN = {15964, 37191, 37122, 328320, 37206}
-
 # Mots-clés dans les domaines/URLs
 CAMEROON_KEYWORDS = [
     "camtel", "mtn.cm", "orange.cm", "nexttel", "yoomee",
@@ -63,9 +60,27 @@ def get_conn():
     return psycopg2.connect(url)
 
 
+def _get_active_cameroon_asns(conn) -> set[int]:
+    """
+    ASN des institutions actives du référentiel monitored_assets -- même
+    logique que score_national_tags (Phase 3) ci-dessous : le référentiel est
+    la source de vérité à jour (174 institutions), préférable à une liste
+    figée qui ne couvrirait qu'une poignée d'opérateurs et se périmerait
+    silencieusement (c'était le cas ici : seul 1 des 5 ASN codés en dur
+    correspondait encore à une institution du référentiel, et MTN/Orange
+    en étaient absents).
+    """
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT asn FROM monitored_assets
+            WHERE asn IS NOT NULL AND active = true
+        """)
+        return {row[0] for row in cur.fetchall()}
+
+
 # ── Phase 1 : IPs ──────────────────────────────────────────────────────────────
 
-def score_ips(conn, city_reader, asn_reader) -> dict[str, int]:
+def score_ips(conn, city_reader, asn_reader, cameroon_asns: set[int]) -> dict[str, int]:
     """Retourne {indicator_id: score} pour tous les IOCs de type ip/ipv6."""
     scores: dict[str, int] = {}
 
@@ -91,7 +106,7 @@ def score_ips(conn, city_reader, asn_reader) -> dict[str, int]:
                     pass
                 try:
                     asn = asn_reader.asn(value)
-                    if asn.autonomous_system_number in CAMEROON_ASN:
+                    if asn.autonomous_system_number in cameroon_asns:
                         score += 2
                 except Exception:
                     pass
@@ -243,6 +258,9 @@ def run() -> None:
 
     conn = get_conn()
 
+    cameroon_asns = _get_active_cameroon_asns(conn)
+    logger.info("%d ASN d'institutions actives dans le référentiel", len(cameroon_asns))
+
     # Les bases MaxMind (.mmdb) sont volumineuses (~80 Mo) et exclues du depot
     # git -- absentes en CI tant qu'un telechargement automatise n'est pas mis
     # en place. On saute proprement la phase IP plutot que de planter : le
@@ -250,7 +268,7 @@ def run() -> None:
     if CITY_DB.exists() and ASN_DB.exists():
         with geoip2.database.Reader(str(CITY_DB)) as city_reader, \
              geoip2.database.Reader(str(ASN_DB))  as asn_reader:
-            ip_scores = score_ips(conn, city_reader, asn_reader)
+            ip_scores = score_ips(conn, city_reader, asn_reader, cameroon_asns)
     else:
         logger.warning("Bases GeoIP introuvables (%s) -- phase IP ignoree", CITY_DB.parent)
         ip_scores = {}
