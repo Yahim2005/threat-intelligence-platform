@@ -105,6 +105,8 @@ async def request_logging_middleware(request: Request, call_next):
         _metrics["requests_5xx"] += 1
 
     # Log structuré JSON
+    # api_client_name/id : posés par api.auth.get_api_key sur request.state
+    # quand la route est protégée par clé API (exports, TAXII) -- absent sinon.
     logger.info(
         "http_request",
         method=request.method,
@@ -112,6 +114,8 @@ async def request_logging_middleware(request: Request, call_next):
         status=response.status_code,
         duration_ms=round(duration_ms, 2),
         client=request.client.host if request.client else "unknown",
+        api_client_name=getattr(request.state, "api_client_name", None),
+        api_client_id=getattr(request.state, "api_client_id", None),
     )
 
     return response

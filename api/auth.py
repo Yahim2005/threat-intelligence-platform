@@ -1,37 +1,22 @@
 # api/auth.py
 
+import hashlib
 import os
-from fastapi import Security, HTTPException, status
-from fastapi.security import APIKeyHeader
-from fastapi import Security, HTTPException, status, Depends
-# FastAPI lit automatiquement le header X-API-Key dans chaque requête
-API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+from datetime import datetime
+from uuid import UUID
 
-
-def get_api_key(api_key: str = Security(API_KEY_HEADER)) -> str:
-    """
-    Dépendance FastAPI : vérifie que le header X-API-Key est présent et correct.
-    Si absent ou incorrect → 403 Forbidden.
-    """
-    expected = os.getenv("TIP_API_KEY")
-    if not expected:
-        raise RuntimeError("TIP_API_KEY non définie dans .env")
-    if api_key != expected:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Clé API invalide ou absente. Fournissez X-API-Key dans les headers.",
-        )
-    return api_key
-
-from fastapi import Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
+from app.models.api_client import ApiClient
 from app.models.user import User
 from app.models.enums import UserRole
 from app.security import decode_access_token
 
+# FastAPI lit automatiquement le header X-API-Key dans chaque requête
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -42,7 +27,60 @@ def get_db():
     finally:
         db.close()
 
-from uuid import UUID
+
+def _hash_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def get_api_key(
+    request: Request,
+    api_key: str = Security(API_KEY_HEADER),
+    db: Session = Depends(get_db),
+) -> ApiClient | None:
+    """
+    Dépendance FastAPI : vérifie le header X-API-Key contre les clés
+    d'organismes enregistrées en base (table api_clients — voir
+    scripts/manage_api_keys.py pour en créer/révoquer).
+
+    Compatibilité : TIP_API_KEY (.env) reste acceptée comme clé de secours
+    "legacy" (utile pour tes propres tests), mais n'est plus la seule clé
+    valide et n'est associée à aucun organisme identifiable dans l'audit log.
+    Les nouveaux partenaires doivent recevoir une clé dédiée via le script.
+
+    Renvoie l'ApiClient correspondant (ou None pour la clé legacy), et pose
+    request.state.api_client_name / api_client_id pour que le middleware de
+    logging (api/main.py) puisse tracer qui a consulté quoi.
+    """
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Clé API invalide ou absente. Fournissez X-API-Key dans les headers.",
+        )
+
+    legacy_key = os.getenv("TIP_API_KEY")
+    if legacy_key and api_key == legacy_key:
+        request.state.api_client_name = "legacy-env-key"
+        request.state.api_client_id = None
+        return None
+
+    client = (
+        db.query(ApiClient)
+        .filter(ApiClient.key_hash == _hash_key(api_key), ApiClient.is_active.is_(True))
+        .first()
+    )
+    if not client:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Clé API invalide ou absente. Fournissez X-API-Key dans les headers.",
+        )
+
+    client.last_used_at = datetime.utcnow()
+    db.commit()
+
+    request.state.api_client_name = client.name
+    request.state.api_client_id = str(client.id)
+    return client
+
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),

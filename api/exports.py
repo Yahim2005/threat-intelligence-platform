@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Indicator
+from app.models.api_client import ApiClient
 from app.models.enums import IndicatorStatus
 from api.auth import get_api_key
 from core.stix import to_stix
@@ -32,16 +33,18 @@ def get_db():
 
 # ─── Requête commune aux trois exports ───────────────────────────────────────
 
-def _fetch_exportable(
+def _exportable_base_query(
     session: Session,
     ioc_type: Optional[str],
     confidence_min: int,
-) -> list[Indicator]:
+):
     """
-    Retourne uniquement les indicateurs exportables :
+    Query (non exécutée) des indicateurs exportables, sans tri :
     - statut active (jamais whitelisted ni expired)
     - confidence >= seuil
     - filtrables par type
+    Factorisée pour être réutilisable par des consommateurs qui ont besoin
+    de leur propre tri/curseur (voir api/taxii.py pour la pagination TAXII).
     """
     q = (
         session.query(Indicator)
@@ -56,10 +59,25 @@ def _fetch_exportable(
         # regroupe physiquement en base (ex: import NVD massif) ne remonte en
         # bloc et masque silencieusement tous les autres types au tri.
         q = q.filter(Indicator.type != "cve")
+    return q
+
+
+def _fetch_exportable(
+    session: Session,
+    ioc_type: Optional[str],
+    confidence_min: int,
+) -> list[Indicator]:
+    """Version triée-et-exécutée de _exportable_base_query, utilisée par les
+    exports ponctuels (/export/*) qui veulent les indicateurs les plus fiables
+    en premier."""
     # Tri secondaire stable : sans lui, des lignes a confidence identique
     # (cas courant, la plupart des collecteurs assignent 50 par defaut)
     # peuvent ressortir regroupees par bloc d'insertion plutot que melangees.
-    return q.order_by(Indicator.confidence.desc(), Indicator.created_at.desc()).all()
+    return (
+        _exportable_base_query(session, ioc_type, confidence_min)
+        .order_by(Indicator.confidence.desc(), Indicator.created_at.desc())
+        .all()
+    )
 
 
 # ─── Export STIX 2.1 ─────────────────────────────────────────────────────────
@@ -69,7 +87,7 @@ def export_stix(
     type: Optional[str] = Query(None, description="Filtrer par type d'IOC"),
     confidence_min: int = Query(50, ge=0, le=100, description="Confidence minimum"),
     db: Session = Depends(get_db),
-    _key: str = Depends(get_api_key),
+    _client: ApiClient | None = Depends(get_api_key),
 ):
     """
     Retourne un bundle STIX 2.1 contenant les indicateurs actifs
@@ -104,7 +122,7 @@ def export_csv(
     type: Optional[str] = Query(None, description="Filtrer par type d'IOC"),
     confidence_min: int = Query(50, ge=0, le=100, description="Confidence minimum"),
     db: Session = Depends(get_db),
-    _key: str = Depends(get_api_key),
+    _client: ApiClient | None = Depends(get_api_key),
 ):
     """
     Retourne un fichier CSV téléchargeable avec les indicateurs actifs.
@@ -147,7 +165,7 @@ def export_blocklist(
     type: Optional[str] = Query(None, description="Filtrer par type : ip, domain, url"),
     confidence_min: int = Query(70, ge=0, le=100, description="Confidence minimum (défaut 70)"),
     db: Session = Depends(get_db),
-    _key: str = Depends(get_api_key),
+    _client: ApiClient | None = Depends(get_api_key),
 ):
     """
     Retourne une liste brute de valeurs (une par ligne) pour import

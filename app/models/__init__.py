@@ -13,3 +13,4 @@ from app.models.threat import Threat, threat_indicators
 from app.models.user import User
 from app.models.monitored_asset import MonitoredAsset
 from app.models.exposed_asset import ExposedAsset, ExposedAssetScanProgress
+from app.models.api_client import ApiClient

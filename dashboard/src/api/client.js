@@ -53,6 +53,8 @@ export const api = {
   monitoredAssets: (params={}) => get(`/monitored-assets?${new URLSearchParams(params)}`),
   createMonitoredAsset: (payload) => send('POST', '/monitored-assets', payload),
   updateMonitoredAsset: (id, payload) => send('PATCH', `/monitored-assets/${id}`, payload),
+  listAdminJobs: () => get('/admin/jobs'),
+  runAdminJob: (jobName) => send('POST', `/admin/jobs/${jobName}/run`, {}),
   cameroonTimeline: (days=30) => get(`/cameroon/timeline?days=${days}`),
   institutionsRanked: () => get('/cameroon/institutions/ranked'),
   vulnSeverity: () => get('/cameroon/vuln-severity'),

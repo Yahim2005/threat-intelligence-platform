@@ -11,18 +11,29 @@ fois et interroger la collection en continu selon le protocole standard.
 Implemente le sous-ensemble du protocole necessaire a un consommateur :
 Discovery -> API Root -> Collections -> Objects/Manifest.
 Reference : https://docs.oasis-open.org/cti/taxii/v2.1/taxii-v2.1.html
+
+Pagination (section 5.3 du spec) : added_after (filtre incrémental) + next
+(curseur opaque renvoyé dans la réponse, à repasser tel quel à l'appel
+suivant). Remplace l'ancien "limit" seul -- voir docs/taxii_integration.md
+pour un exemple de boucle de synchronisation cote client.
 """
 from __future__ import annotations
+import base64
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
+from sqlalchemy import tuple_
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
+from app.models import Indicator
+from app.models.api_client import ApiClient
 from api.auth import get_api_key
-from api.exports import _fetch_exportable
+from api.exports import _exportable_base_query
 from core.stix import to_stix
 import logging
 
@@ -63,8 +74,73 @@ def _collection_descriptor() -> dict:
     }
 
 
+# ─── Pagination par curseur ───────────────────────────────────────────────────
+# Curseur opaque = base64("<created_at ISO>|<id>") du dernier Indicator brut
+# examiné (avant conversion STIX). Ancré sur les lignes brutes plutôt que sur
+# les objets STIX convertis avec succès : ainsi le curseur avance toujours
+# de façon cohérente même quand certaines lignes (ex: type "cve", non
+# convertible) sont ignorées, sans jamais sauter ni rejouer un IOC.
+
+def _encode_cursor(created_at: datetime, ind_id) -> str:
+    raw = f"{created_at.isoformat()}|{ind_id}"
+    return base64.urlsafe_b64encode(raw.encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        ts_str, id_str = raw.rsplit("|", 1)
+        return datetime.fromisoformat(ts_str), UUID(id_str)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Paramètre 'next' invalide ou expiré.")
+
+
+def _parse_added_after(value: str) -> datetime:
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Paramètre 'added_after' invalide : attendu au format ISO 8601 (ex: 2026-01-01T00:00:00Z).",
+        )
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def _paginated_indicators(
+    db: Session,
+    confidence_min: int,
+    added_after: Optional[str],
+    next_cursor: Optional[str],
+    limit: int,
+) -> tuple[list[Indicator], bool]:
+    """
+    Renvoie jusqu'à `limit` indicateurs bruts (+ indicateur `more`), triés de
+    façon stable par (created_at, id) croissant -- l'ordre choisi pour que la
+    pagination par curseur avance de façon monotone, adapté à une synchro
+    incrémentale (contrairement au tri par confidence des exports ponctuels).
+    """
+    q = _exportable_base_query(db, ioc_type=None, confidence_min=confidence_min)
+
+    if added_after:
+        q = q.filter(Indicator.created_at > _parse_added_after(added_after))
+
+    if next_cursor:
+        cursor_dt, cursor_id = _decode_cursor(next_cursor)
+        q = q.filter(tuple_(Indicator.created_at, Indicator.id) > (cursor_dt, cursor_id))
+
+    rows = (
+        q.order_by(Indicator.created_at.asc(), Indicator.id.asc())
+        .limit(limit + 1)
+        .all()
+    )
+    more = len(rows) > limit
+    return rows[:limit], more
+
+
 @router.get("/", summary="TAXII Discovery")
-def discovery(_key: str = Depends(get_api_key)):
+def discovery(_client: ApiClient | None = Depends(get_api_key)):
     """Point d'entree TAXII : liste les API roots disponibles."""
     return _taxii_response({
         "title": "TIP ANTIC/CIRT Cameroun",
@@ -75,7 +151,7 @@ def discovery(_key: str = Depends(get_api_key)):
 
 
 @router.get("/api", summary="TAXII API Root")
-def api_root(_key: str = Depends(get_api_key)):
+def api_root(_client: ApiClient | None = Depends(get_api_key)):
     """Decrit les capacites de cet API root."""
     return _taxii_response({
         "title": "TIP - API Root",
@@ -86,12 +162,12 @@ def api_root(_key: str = Depends(get_api_key)):
 
 
 @router.get("/api/collections", summary="Lister les collections")
-def list_collections(_key: str = Depends(get_api_key)):
+def list_collections(_client: ApiClient | None = Depends(get_api_key)):
     return _taxii_response({"collections": [_collection_descriptor()]})
 
 
 @router.get("/api/collections/{collection_id}", summary="Detail d'une collection")
-def get_collection(collection_id: str, _key: str = Depends(get_api_key)):
+def get_collection(collection_id: str, _client: ApiClient | None = Depends(get_api_key)):
     if collection_id != COLLECTION_ID:
         return _taxii_response({"title": "Collection introuvable"}, status_code=404)
     return _taxii_response(_collection_descriptor())
@@ -103,23 +179,27 @@ def get_objects(
     limit: int = Query(500, ge=1, le=2000),
     type: Optional[str] = Query(None, description="Filtrer par type d'objet STIX, ex: indicator"),
     confidence_min: int = Query(50, ge=0, le=100),
+    added_after: Optional[str] = Query(None, description="ISO 8601 -- ne renvoyer que les IOCs créés après cette date"),
+    next: Optional[str] = Query(None, description="Curseur opaque renvoyé par la réponse précédente"),
     db: Session = Depends(get_db),
-    _key: str = Depends(get_api_key),
+    _client: ApiClient | None = Depends(get_api_key),
 ):
     """Renvoie les objets STIX de la collection, au format attendu par tout
-    client TAXII 2.1 (MISP, OpenCTI, SIEM compatibles...). Pagination simple
-    par 'limit' -- suffisant pour un volume d'indicateurs actifs raisonnable."""
+    client TAXII 2.1 (MISP, OpenCTI, SIEM compatibles...).
+
+    Pagination conforme au spec (section 5.3) : `added_after` filtre les IOCs
+    créés après une date donnée, `next` reprend une pagination en cours. Une
+    page peut contenir moins de `limit` objets si certaines lignes de la
+    fenêtre ne se convertissent pas en STIX (ex: type "cve") -- ce n'est pas
+    une anomalie, `more`/`next` restent fiables pour poursuivre la synchro.
+    """
     if collection_id != COLLECTION_ID:
         return _taxii_response({"title": "Collection introuvable"}, status_code=404)
 
-    # Marge : certains types d'IOC (ex: cve) ne se convertissent pas en objet
-    # STIX "indicator" et sont ignores -- on sur-recupere pour compenser et
-    # renvoyer bien 'limit' objets valides quand la donnee le permet.
-    candidates = _fetch_exportable(db, ioc_type=None, confidence_min=confidence_min)[:limit * 3]
+    rows, more = _paginated_indicators(db, confidence_min, added_after, next, limit)
+
     stix_objects = []
-    for ind in candidates:
-        if len(stix_objects) >= limit:
-            break
+    for ind in rows:
         try:
             obj = to_stix(ind)
             if obj:
@@ -130,7 +210,10 @@ def get_objects(
     if type:
         stix_objects = [o for o in stix_objects if o.get("type") == type]
 
-    return _taxii_response({"more": len(stix_objects) == limit, "objects": stix_objects})
+    response = {"more": more, "objects": stix_objects}
+    if more and rows:
+        response["next"] = _encode_cursor(rows[-1].created_at, rows[-1].id)
+    return _taxii_response(response)
 
 
 @router.get("/api/collections/{collection_id}/manifest", summary="Manifeste (metadonnees seules)")
@@ -138,20 +221,22 @@ def get_manifest(
     collection_id: str,
     limit: int = Query(500, ge=1, le=2000),
     confidence_min: int = Query(50, ge=0, le=100),
+    added_after: Optional[str] = Query(None, description="ISO 8601 -- ne renvoyer que les IOCs créés après cette date"),
+    next: Optional[str] = Query(None, description="Curseur opaque renvoyé par la réponse précédente"),
     db: Session = Depends(get_db),
-    _key: str = Depends(get_api_key),
+    _client: ApiClient | None = Depends(get_api_key),
 ):
     """Version allegee de /objects : ne renvoie que les identifiants et
     dates, sans le contenu complet -- utile pour un client qui veut d'abord
-    verifier ce qui a change avant de tout retelecharger."""
+    verifier ce qui a change avant de tout retelecharger. Meme mecanique de
+    pagination que /objects (added_after + next)."""
     if collection_id != COLLECTION_ID:
         return _taxii_response({"title": "Collection introuvable"}, status_code=404)
 
-    candidates = _fetch_exportable(db, ioc_type=None, confidence_min=confidence_min)[:limit * 3]
+    rows, more = _paginated_indicators(db, confidence_min, added_after, next, limit)
+
     manifest_objects = []
-    for ind in candidates:
-        if len(manifest_objects) >= limit:
-            break
+    for ind in rows:
         try:
             obj = to_stix(ind)
             if not obj:
@@ -167,4 +252,7 @@ def get_manifest(
             logger.warning(f"[TAXII manifest] Erreur sur un indicateur : {e}")
             continue
 
-    return _taxii_response({"more": len(manifest_objects) == limit, "objects": manifest_objects})
+    response = {"more": more, "objects": manifest_objects}
+    if more and rows:
+        response["next"] = _encode_cursor(rows[-1].created_at, rows[-1].id)
+    return _taxii_response(response)
