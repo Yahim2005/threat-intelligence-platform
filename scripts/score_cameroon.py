@@ -148,7 +148,39 @@ def score_domains(conn) -> dict[str, int]:
     return scores
 
 
-# ── Phase 3 : Propagation cluster ─────────────────────────────────────────────
+# ── Phase 3 : Tags de surveillance nationale ──────────────────────────────────
+
+def score_national_tags(conn) -> dict[str, int]:
+    """
+    Un IOC porte un tag typosquat:{institution}, ct:{institution} ou
+    nrd_watch:{institution} uniquement quand un de nos propres collecteurs
+    de surveillance nationale l'a explicitement rattache a une institution
+    camerounaise -- c'est un signal plus fort et plus a jour que la liste de
+    mots-cles codee en dur ci-dessus (qui ne couvre qu'une quinzaine
+    d'institutions, pas les 143 du referentiel complet).
+    """
+    scores: dict[str, int] = {}
+    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        cur.execute("""
+            SELECT DISTINCT i.id
+            FROM indicators i
+            JOIN indicator_tags it ON it.indicator_id = i.id
+            JOIN tags t ON t.id = it.tag_id
+            WHERE i.status = 'active'
+            AND (
+                (t.name LIKE 'typosquat:%%' AND t.name NOT IN ('typosquat:confirmed', 'typosquat:potential'))
+                OR (t.name LIKE 'ct:%%' AND t.name NOT IN ('ct:confirmed', 'ct:potential'))
+                OR (t.name LIKE 'nrd_watch:%%' AND t.name != 'nrd_watch')
+            )
+        """)
+        for row in cur.fetchall():
+            scores[str(row["id"])] = 4
+
+    logger.info("Phase 3 — %d IOCs rattaches a une institution via nos tags de surveillance nationale", len(scores))
+    return scores
+
+
+# ── Phase 4 : Propagation cluster ─────────────────────────────────────────────
 
 def propagate_clusters(conn, cameroon_ids: set[str]) -> dict[str, int]:
     """
@@ -211,15 +243,25 @@ def run() -> None:
 
     conn = get_conn()
 
-    with geoip2.database.Reader(str(CITY_DB)) as city_reader, \
-         geoip2.database.Reader(str(ASN_DB))  as asn_reader:
+    # Les bases MaxMind (.mmdb) sont volumineuses (~80 Mo) et exclues du depot
+    # git -- absentes en CI tant qu'un telechargement automatise n'est pas mis
+    # en place. On saute proprement la phase IP plutot que de planter : le
+    # signal des tags de surveillance nationale (Phase 3) reste disponible.
+    if CITY_DB.exists() and ASN_DB.exists():
+        with geoip2.database.Reader(str(CITY_DB)) as city_reader, \
+             geoip2.database.Reader(str(ASN_DB))  as asn_reader:
+            ip_scores = score_ips(conn, city_reader, asn_reader)
+    else:
+        logger.warning("Bases GeoIP introuvables (%s) -- phase IP ignoree", CITY_DB.parent)
+        ip_scores = {}
 
-        ip_scores     = score_ips(conn, city_reader, asn_reader)
-        domain_scores = score_domains(conn)
+    domain_scores = score_domains(conn)
+
+    tag_scores = score_national_tags(conn)
 
     # Fusion des scores directs
     all_scores: dict[str, int] = {}
-    for iid, s in {**ip_scores, **domain_scores}.items():
+    for iid, s in {**ip_scores, **domain_scores, **tag_scores}.items():
         all_scores[iid] = all_scores.get(iid, 0) + s
 
     cameroon_ids = set(all_scores.keys())
