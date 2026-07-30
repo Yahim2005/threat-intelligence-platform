@@ -345,3 +345,20 @@ class ApiClientResponse(BaseModel):
 
 class ApiClientCreateResponse(ApiClientResponse):
     api_key: str
+
+
+# ─── Destinataires du digest email ────────────────────────────────────────────
+
+class EmailRecipientCreate(BaseModel):
+    name: str
+    email: str
+
+
+class EmailRecipientResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

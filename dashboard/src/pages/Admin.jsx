@@ -639,6 +639,201 @@ function ApiClientsPanel() {
   )
 }
 
+function NewEmailRecipientModal({ onClose, onCreated }) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function submit() {
+    if (!name.trim()) {
+      setError('Le nom du destinataire est obligatoire.')
+      return
+    }
+    if (!email.trim() || !email.includes('@')) {
+      setError('Adresse email invalide.')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await api.createEmailRecipient({ name: name.trim(), email: email.trim() })
+      onCreated()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#ede8e3]">
+          <h2 className="text-base font-bold text-gray-900" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+            Nouveau destinataire
+          </h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-50">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Nom *</label>
+            <input
+              type="text" value={name} placeholder="ex: Équipe CIRT"
+              onChange={e => setName(e.target.value)}
+              className="w-full text-sm border border-[#ede8e3] rounded-lg px-3 py-2 bg-[#faf8f5] focus:outline-none focus:border-[#c4a882]"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Email *</label>
+            <input
+              type="email" value={email} placeholder="contact@antic.cm"
+              onChange={e => setEmail(e.target.value)}
+              className="w-full text-sm border border-[#ede8e3] rounded-lg px-3 py-2 bg-[#faf8f5] focus:outline-none focus:border-[#c4a882]"
+            />
+          </div>
+          {error && (
+            <div className="px-3 py-2 bg-red-50 text-red-600 text-xs rounded-lg">{error}</div>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-500 border border-[#ede8e3] rounded-lg hover:bg-gray-50">
+              Annuler
+            </button>
+            <button
+              onClick={submit} disabled={saving}
+              className="px-4 py-2 text-sm bg-[#8b7355] text-white rounded-lg hover:bg-[#6b5740] disabled:opacity-60"
+            >
+              {saving ? 'Création…' : 'Créer'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EmailRecipientRow({ recipient, onRevoke, revoking }) {
+  const isRevoking = revoking === recipient.id
+  return (
+    <tr className="border-b border-[#faf8f5] last:border-0">
+      <td className="px-4 py-3">
+        <p className="font-medium text-gray-800">{recipient.name}</p>
+        <p className="text-xs text-gray-400">{recipient.email}</p>
+      </td>
+      <td className="px-4 py-3">
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+          recipient.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
+        }`}>
+          {recipient.is_active ? 'actif' : 'désactivé'}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-xs text-gray-400">{timeAgo(recipient.created_at)}</td>
+      <td className="px-4 py-3 text-right">
+        {recipient.is_active && (
+          <button
+            onClick={() => onRevoke(recipient)}
+            disabled={isRevoking}
+            className="ml-auto flex items-center gap-1 px-2.5 py-1 text-xs text-red-500 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
+          >
+            <Trash2 size={12} /> {isRevoking ? 'Désactivation…' : 'Désactiver'}
+          </button>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+function EmailRecipientsPanel() {
+  const [recipients, setRecipients] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [revoking, setRevoking] = useState(null)
+  const [message, setMessage] = useState(null)
+
+  function load() {
+    setLoading(true)
+    api.listEmailRecipients().then(setRecipients).catch(console.error).finally(() => setLoading(false))
+  }
+
+  useEffect(() => { load() }, [])
+
+  function handleCreated() {
+    setCreating(false)
+    setMessage({ type: 'ok', text: 'Destinataire ajouté.' })
+    load()
+  }
+
+  async function handleRevoke(recipient) {
+    if (!window.confirm(`Retirer "${recipient.name}" (${recipient.email}) de la liste des destinataires du digest ?`)) return
+    setRevoking(recipient.id)
+    setMessage(null)
+    try {
+      await api.revokeEmailRecipient(recipient.id)
+      setMessage({ type: 'ok', text: `${recipient.name} désactivé.` })
+      load()
+    } catch (e) {
+      setMessage({ type: 'error', text: e.message })
+    } finally {
+      setRevoking(null)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-gray-400">
+          Destinataires du digest IOC Cameroun, envoyé tous les 3 jours par email.
+          Désactiver un destinataire l'exclut du prochain envoi sans le supprimer.
+        </p>
+        <button
+          onClick={() => setCreating(true)}
+          className="shrink-0 flex items-center gap-1.5 px-4 py-2 bg-[#8b7355] text-white text-sm rounded-xl hover:bg-[#6b5740] transition-colors"
+        >
+          <Plus size={14} /> Ajouter
+        </button>
+      </div>
+
+      {message && (
+        <div className={`px-4 py-2.5 rounded-xl text-sm ${message.type === 'ok' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl border border-[#ede8e3] overflow-hidden">
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-6 h-6 border-2 border-[#c4a882] border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : recipients.length === 0 ? (
+          <p className="text-sm text-gray-400 italic py-12 text-center">Aucun destinataire enregistré.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#f5f0eb] bg-[#faf8f5]">
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[#8b7355] uppercase">Destinataire</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[#8b7355] uppercase">Statut</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-[#8b7355] uppercase">Ajouté</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {recipients.map(r => (
+                <EmailRecipientRow key={r.id} recipient={r} onRevoke={handleRevoke} revoking={revoking} />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {creating && (
+        <NewEmailRecipientModal onClose={() => setCreating(false)} onCreated={handleCreated} />
+      )}
+    </div>
+  )
+}
+
 export default function Admin() {
   const { isAdmin } = useAuth()
   const [assets, setAssets] = useState([])
@@ -698,7 +893,7 @@ export default function Admin() {
       </div>
 
       <div className="flex gap-2">
-        {[{ v: 'institutions', l: 'Référentiel' }, { v: 'jobs', l: 'Collecte & traitement' }, { v: 'api-clients', l: 'Partenaires API' }].map(({ v, l }) => (
+        {[{ v: 'institutions', l: 'Référentiel' }, { v: 'jobs', l: 'Collecte & traitement' }, { v: 'api-clients', l: 'Partenaires API' }, { v: 'email-recipients', l: 'Destinataires email' }].map(({ v, l }) => (
           <button
             key={v}
             onClick={() => setTab(v)}
@@ -714,6 +909,8 @@ export default function Admin() {
       {tab === 'jobs' && <JobsPanel />}
 
       {tab === 'api-clients' && <ApiClientsPanel />}
+
+      {tab === 'email-recipients' && <EmailRecipientsPanel />}
 
       {tab === 'institutions' && (
       <>

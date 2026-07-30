@@ -27,7 +27,7 @@ from sqlalchemy import text
 from app.database import SessionLocal
 from app.logger import setup_logging, get_logger
 from app.models import Indicator
-from api import queries, schemas, exports, taxii, api_clients_routes
+from api import queries, schemas, exports, taxii, api_clients_routes, email_recipients_routes
 from api.rate_limit import limiter, rate_limit_exceeded_handler
 
 # ─── Logging : doit être configuré en premier ─────────────────────────────────
@@ -78,6 +78,7 @@ app.add_middleware(
 app.include_router(exports.router)
 app.include_router(taxii.router)
 app.include_router(api_clients_routes.router)
+app.include_router(email_recipients_routes.router)
 
 
 # ─── Middleware : log + métriques de chaque requête ───────────────────────────
