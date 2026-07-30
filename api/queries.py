@@ -106,6 +106,9 @@ def get_threats(
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[dict], int]:
+    from core.clustering import mechanism_counts_for_indicators
+    from app.models.exposed_asset import ExposedAsset
+
     base = session.query(Threat)
     total = base.count()
 
@@ -133,6 +136,18 @@ def get_threats(
             default=0,
         )
 
+        institution = threat.target_institution
+        exposed_ip_count = (
+            session.query(ExposedAsset)
+            .filter(ExposedAsset.monitored_asset_id == threat.target_institution_id)
+            .count()
+            if threat.target_institution_id else 0
+        )
+        first_seen = min(
+            (i.first_seen for i in indicators if i.first_seen is not None),
+            default=None,
+        )
+
         results.append({
             "id": str(threat.id),
             "name": threat.name,
@@ -140,6 +155,10 @@ def get_threats(
             "avg_confidence": round(avg_confidence, 2) if avg_confidence is not None else None,
             "top_tags": top_tags,
             "cameroon_relevance": cameroon_relevance,
+            "institution": institution.name if institution else None,
+            "mechanism_counts": dict(mechanism_counts_for_indicators(indicators)),
+            "exposed_ip_count": exposed_ip_count,
+            "first_seen": first_seen.isoformat() if first_seen else None,
         })
 
     return results, total
@@ -336,6 +355,8 @@ def get_threat_by_id(session: Session, threat_id: str) -> Optional[dict]:
     Retourne le détail complet d'un Threat : métadonnées + IOCs + stats.
     """
     from app.models.threat import Threat
+    from app.models.exposed_asset import ExposedAsset
+    from core.clustering import mechanism_counts_for_indicators
 
     threat = session.query(Threat).filter(Threat.id == threat_id).first()
     if not threat:
@@ -376,6 +397,21 @@ def get_threat_by_id(session: Session, threat_id: str) -> Optional[dict]:
         for i in sorted_inds
     ]
 
+    institution = threat.target_institution
+    exposed_ips = (
+        [
+            e.ip_address for e in
+            session.query(ExposedAsset)
+            .filter(ExposedAsset.monitored_asset_id == threat.target_institution_id)
+            .all()
+        ]
+        if threat.target_institution_id else []
+    )
+    first_seen = min(
+        (i.first_seen for i in indicators if i.first_seen is not None),
+        default=None,
+    )
+
     return {
         "id": str(threat.id),
         "name": threat.name,
@@ -388,6 +424,10 @@ def get_threat_by_id(session: Session, threat_id: str) -> Optional[dict]:
         "top_tags": top_tags,
         "indicators_by_type": type_counts,
         "indicators": ioc_list,
+        "institution": institution.name if institution else None,
+        "mechanism_counts": dict(mechanism_counts_for_indicators(indicators)),
+        "exposed_ips": exposed_ips,
+        "first_seen": first_seen.isoformat() if first_seen else None,
     }
     
 def get_top_sources(session: Session, limit: int = 10) -> list[dict]:

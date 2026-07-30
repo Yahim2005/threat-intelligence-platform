@@ -6,7 +6,7 @@ import {
   LineChart, Line, CartesianGrid, Area, AreaChart
 } from 'recharts'
 import { ArrowUpRight, Download, TrendingUp, Shield, Database, Activity, AlertTriangle, MapPin } from 'lucide-react'
-import { api } from '../api/client'
+import { api, getAuthToken } from '../api/client'
 import AlertsPanel from '../components/AlertsPanel'
 import ThreatGlobe from '../components/ThreatGlobe'
 const TYPE_COLORS = ['#8b7355','#c4a882','#d4b896','#a0845c','#6b5740','#e8d5b7','#bfa07a']
@@ -126,12 +126,17 @@ export default function Overview({ onOpenDetail, onNavigate }) {
   }, [])
 
   function downloadExport(format) {
-    const apiKey = import.meta.env.VITE_API_KEY ?? ''
+    // Authentifié par le token JWT de la session dashboard (même mécanisme
+    // que le reste de l'app, voir getAuthToken/authHeaders dans api/client.js)
+    // -- pas une clé API, qui n'a plus lieu d'être exposée côté navigateur.
     const filenames = { stix: 'export.json', csv: 'export.csv', blocklist: 'blocklist.txt' }
     const urls = { stix: '/api/export/stix', csv: '/api/export/csv', blocklist: '/api/export/blocklist' }
     setExporting(format)
-    fetch(urls[format], { headers: { 'X-API-Key': apiKey } })
-      .then(res => res.blob())
+    fetch(urls[format], { headers: { Authorization: `Bearer ${getAuthToken()}` } })
+      .then(res => {
+        if (!res.ok) throw new Error(`Échec de l'export (${res.status})`)
+        return res.blob()
+      })
       .then(blob => {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')

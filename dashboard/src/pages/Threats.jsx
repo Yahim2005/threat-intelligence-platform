@@ -1,7 +1,13 @@
 // src/pages/Threats.jsx
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { Shield, ChevronLeft, ChevronRight, ArrowUpRight, Tag } from 'lucide-react'
+import { Shield, ChevronLeft, ChevronRight, ArrowUpRight, Tag, Building2 } from 'lucide-react'
+
+const MECHANISM_LABELS = {
+  typosquat: 'typosquatting',
+  ct: 'certificats suspects',
+  nrd_watch: 'domaines récents suspects',
+}
 
 // ── Couleur selon confidence ──────────────────────────────────────
 function confidenceColor(score) {
@@ -46,6 +52,37 @@ function ThreatCard({ threat, onClick }) {
               <ArrowUpRight size={14} className="text-gray-300 group-hover:text-[#c4a882] transition-colors" />
             </div>
           </div>
+
+          {/* Institution + première observation */}
+          {(threat.institution || threat.first_seen) && (
+            <div className="flex items-center gap-3 mb-2 text-xs text-gray-400">
+              {threat.institution && (
+                <span className="flex items-center gap-1 text-[#8b7355] font-medium">
+                  <Building2 size={11} /> {threat.institution}
+                </span>
+              )}
+              {threat.first_seen && (
+                <span>Depuis le {new Date(threat.first_seen).toLocaleDateString('fr-FR')}</span>
+              )}
+            </div>
+          )}
+
+          {/* Mécanismes + surface d'attaque */}
+          {(Object.keys(threat.mechanism_counts || {}).length > 0 || threat.exposed_ip_count > 0) && (
+            <div className="flex items-center gap-1.5 flex-wrap mb-2">
+              {Object.entries(threat.mechanism_counts || {}).map(([mech, count]) => (
+                <span key={mech}
+                  className="px-2 py-0.5 bg-[#faf8f5] text-[#8b7355] border border-[#ede8e3] rounded-full text-xs">
+                  {count} {MECHANISM_LABELS[mech] ?? mech}
+                </span>
+              ))}
+              {threat.exposed_ip_count > 0 && (
+                <span className="px-2 py-0.5 bg-red-50 text-red-600 border border-red-100 rounded-full text-xs">
+                  {threat.exposed_ip_count} IP{threat.exposed_ip_count > 1 ? 's' : ''} exposée{threat.exposed_ip_count > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Confidence */}
           <div className="flex items-center gap-3 mb-3">

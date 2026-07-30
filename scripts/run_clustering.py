@@ -33,28 +33,20 @@ def run(dry_run: bool) -> None:
 
     session = SessionLocal()
     try:
-        results = extract_clusters(session)
+        # extract_clusters() commit/rollback en interne selon dry_run --
+        # ne pas re-committer/rollback ici en double.
+        results = extract_clusters(session, dry_run=dry_run)
 
-        if dry_run:
-            session.rollback()
-            logger.info("[DRY-RUN] %d clusters auraient été créés", len(results))
-            for r in results[:10]:
-                logger.info(
-                    "  [DRY-RUN] %s | type=%s | %d indicateurs",
-                    r["name"], r["threat_type"], r["indicator_count"],
-                )
-            if len(results) > 10:
-                logger.info("  ... et %d autres", len(results) - 10)
-        else:
+        prefix = "[DRY-RUN] " if dry_run else ""
+        logger.info("%s%d clusters-institution créés/mis à jour", prefix, len(results))
+        for r in results[:10]:
             logger.info(
-                "Terminé | %d Threats créées/mises à jour",
-                len(results),
+                "  %s%s | %d indicateurs | mécanismes=%s | %d IP(s) exposée(s)",
+                prefix, r["name"], r["indicator_count"],
+                r["mechanism_counts"], r["exposed_ip_count"],
             )
-            for r in results[:10]:
-                logger.info(
-                    "  %s | type=%s | %d indicateurs",
-                    r["name"], r["threat_type"], r["indicator_count"],
-                )
+        if len(results) > 10:
+            logger.info("  ... et %d autres", len(results) - 10)
 
     except Exception as exc:
         session.rollback()

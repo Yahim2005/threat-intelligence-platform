@@ -12,8 +12,13 @@ HEADERS = {"X-API-Key": API_KEY}
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
 
-def test_export_without_key_returns_403():
-    assert client.get("/export/blocklist").status_code == 403
+def test_export_without_credentials_returns_401():
+    # /export/* accepte désormais soit une clé API (partenaire), soit un
+    # token Bearer (utilisateur dashboard) -- voir get_current_user_or_api_key
+    # dans api/auth.py. Sans AUCUN des deux, l'identité n'est pas établie :
+    # 401, cohérent avec get_current_user qui traite déjà ce cas ainsi.
+    # Une clé API présente mais invalide reste un 403 (test ci-dessous).
+    assert client.get("/export/blocklist").status_code == 401
 
 def test_export_with_wrong_key_returns_403():
     assert client.get("/export/blocklist", headers={"X-API-Key": "mauvaise-cle"}).status_code == 403

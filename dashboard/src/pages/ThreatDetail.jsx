@@ -1,12 +1,18 @@
 // src/pages/ThreatDetail.jsx
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Shield, Tag, List, BarChart2 } from 'lucide-react'
+import { ArrowLeft, Shield, Tag, List, BarChart2, Building2, Server } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { api } from '../api/client'
 import TLPBadge from '../components/TLPBadge'
 import StatusBadge from '../components/StatusBadge'
 
 const BEIGE_PALETTE = ['#8b7355','#c4a882','#a0845c','#6b5740','#d4b896','#bfa07a','#e8d5b7']
+
+const MECHANISM_LABELS = {
+  typosquat: 'typosquatting',
+  ct: 'certificats suspects',
+  nrd_watch: 'domaines récents suspects',
+}
 
 // ── Tooltip custom ────────────────────────────────────────────────
 function CustomTooltip({ active, payload, label }) {
@@ -129,9 +135,29 @@ export default function ThreatDetail({ threatId, onBack, onOpenDetail }) {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
 
         <Section icon={Shield} title="Informations">
+          {threat.institution && (
+            <MetaRow label="Institution">
+              <span className="flex items-center gap-1.5 font-medium text-[#8b7355]">
+                <Building2 size={13} /> {threat.institution}
+              </span>
+            </MetaRow>
+          )}
           <MetaRow label="Type">{threat.threat_type}</MetaRow>
           <MetaRow label="TLP"><TLPBadge tlp={threat.tlp} /></MetaRow>
+          <MetaRow label="1ère observation">{fmt(threat.first_seen)}</MetaRow>
           <MetaRow label="Créé le">{fmt(threat.created_at)}</MetaRow>
+          {Object.keys(threat.mechanism_counts || {}).length > 0 && (
+            <MetaRow label="Mécanismes">
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(threat.mechanism_counts).map(([mech, count]) => (
+                  <span key={mech}
+                    className="px-2 py-0.5 bg-[#faf8f5] text-[#8b7355] border border-[#ede8e3] rounded-full text-xs">
+                    {count} {MECHANISM_LABELS[mech] ?? mech}
+                  </span>
+                ))}
+              </div>
+            </MetaRow>
+          )}
           <MetaRow label="Confidence moy.">
             <div className="flex items-center gap-2">
               <div className="w-24 bg-[#f5f0eb] rounded-full h-1.5">
@@ -162,6 +188,20 @@ export default function ThreatDetail({ threatId, onBack, onOpenDetail }) {
           )}
         </Section>
       </div>
+
+      {/* ── IPs exposées (surface d'attaque de l'institution) ──── */}
+      {threat.exposed_ips?.length > 0 && (
+        <Section icon={Server} title={`Surface d'attaque exposée (${threat.exposed_ips.length} IP${threat.exposed_ips.length > 1 ? 's' : ''})`}>
+          <div className="flex flex-wrap gap-2">
+            {threat.exposed_ips.map(ip => (
+              <span key={ip}
+                className="px-2.5 py-1 bg-red-50 text-red-600 border border-red-100 rounded-full text-xs font-mono">
+                {ip}
+              </span>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* ── Top tags ─────────────────────────────────────────── */}
       <Section icon={Tag} title="Tags dominants">

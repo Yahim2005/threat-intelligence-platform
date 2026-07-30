@@ -13,7 +13,8 @@ from app.database import SessionLocal
 from app.models import Indicator
 from app.models.api_client import ApiClient
 from app.models.enums import IndicatorStatus
-from api.auth import get_api_key
+from app.models.user import User
+from api.auth import get_current_user_or_api_key
 from api.rate_limit import client_limiter
 from core.stix import to_stix
 import stix2
@@ -95,12 +96,13 @@ def export_stix(
     type: Optional[str] = Query(None, description="Filtrer par type d'IOC"),
     confidence_min: int = Query(50, ge=0, le=100, description="Confidence minimum"),
     db: Session = Depends(get_db),
-    _client: ApiClient | None = Depends(get_api_key),
+    _auth: User | ApiClient | None = Depends(get_current_user_or_api_key),
 ):
     """
     Retourne un bundle STIX 2.1 contenant les indicateurs actifs
     au-dessus du seuil de confidence.
-    Protégé par clé API (header X-API-Key).
+    Protégé par clé API (header X-API-Key, partenaires) ou session
+    dashboard (token Bearer, utilisateurs connectés).
     """
     indicators = _fetch_exportable(db, ioc_type=type, confidence_min=confidence_min)
 
@@ -132,11 +134,12 @@ def export_csv(
     type: Optional[str] = Query(None, description="Filtrer par type d'IOC"),
     confidence_min: int = Query(50, ge=0, le=100, description="Confidence minimum"),
     db: Session = Depends(get_db),
-    _client: ApiClient | None = Depends(get_api_key),
+    _auth: User | ApiClient | None = Depends(get_current_user_or_api_key),
 ):
     """
     Retourne un fichier CSV téléchargeable avec les indicateurs actifs.
-    Protégé par clé API (header X-API-Key).
+    Protégé par clé API (header X-API-Key, partenaires) ou session
+    dashboard (token Bearer, utilisateurs connectés).
     """
     indicators = _fetch_exportable(db, ioc_type=type, confidence_min=confidence_min)
 
@@ -177,13 +180,14 @@ def export_blocklist(
     type: Optional[str] = Query(None, description="Filtrer par type : ip, domain, url"),
     confidence_min: int = Query(70, ge=0, le=100, description="Confidence minimum (défaut 70)"),
     db: Session = Depends(get_db),
-    _client: ApiClient | None = Depends(get_api_key),
+    _auth: User | ApiClient | None = Depends(get_current_user_or_api_key),
 ):
     """
     Retourne une liste brute de valeurs (une par ligne) pour import
     direct dans un firewall ou DNS RPZ.
     Seuil par défaut 70 car usage opérationnel direct.
-    Protégé par clé API (header X-API-Key).
+    Protégé par clé API (header X-API-Key, partenaires) ou session
+    dashboard (token Bearer, utilisateurs connectés).
     """
     indicators = _fetch_exportable(db, ioc_type=type, confidence_min=confidence_min)
 

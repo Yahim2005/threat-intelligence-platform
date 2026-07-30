@@ -112,6 +112,39 @@ def get_current_user(
     return user
 
 
+def get_current_user_or_api_key(
+    request: Request,
+    api_key: str = Security(API_KEY_HEADER),
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User | ApiClient | None:
+    """
+    Dépendance combinée pour les routes utilisées À LA FOIS par des
+    partenaires externes (clé API -- TAXII, scripts) ET par un utilisateur du
+    dashboard authentifié par JWT (ex: boutons d'export d'Overview.jsx, qui
+    envoyaient auparavant une clé API partagée exposée dans le bundle JS
+    public -- voir dashboard/src/api/client.js pour le token déjà utilisé
+    par le reste du dashboard).
+
+    Réutilise get_api_key et get_current_user tels quels (mêmes messages
+    d'erreur, même comportement) plutôt que de dupliquer leur logique --
+    aucun des deux n'est modifié, donc aucun usage existant n'est affecté.
+
+    Ordre : clé API d'abord si fournie (un partenaire qui se trompe de clé
+    reçoit un 403 explicite, pas un 401 générique), puis Bearer. Si ni l'un
+    ni l'autre n'est fourni, 401 -- cohérent avec get_current_user, qui
+    traite déjà l'absence de credentials comme un 401.
+    """
+    if api_key:
+        return get_api_key(request=request, api_key=api_key, db=db)
+    if credentials is not None:
+        return get_current_user(credentials=credentials, db=db)
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentification requise : fournissez un token Bearer (session dashboard) ou une clé API X-API-Key (partenaire).",
+    )
+
+
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """
     Dépendance FastAPI : comme get_current_user, mais exige en plus le rôle admin.

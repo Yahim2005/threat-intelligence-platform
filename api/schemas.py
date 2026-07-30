@@ -56,6 +56,10 @@ class ThreatResponse(BaseModel):
     avg_confidence: Optional[float]
     top_tags: list[str]
     cameroon_relevance: int = 0
+    institution: Optional[str] = None
+    mechanism_counts: dict[str, int] = {}
+    exposed_ip_count: int = 0
+    first_seen: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -123,6 +127,10 @@ class ThreatDetailResponse(BaseModel):
     top_tags: list[str]
     indicators_by_type: dict[str, int]
     indicators: list[ThreatIndicatorResponse]
+    institution: Optional[str] = None
+    mechanism_counts: dict[str, int] = {}
+    exposed_ips: list[str] = []
+    first_seen: Optional[str] = None
     
 class NameCountResponse(BaseModel):
     name: str

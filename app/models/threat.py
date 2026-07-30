@@ -13,6 +13,7 @@ from app.models.enums import TLPLevel, ThreatType
 
 if TYPE_CHECKING:
     from app.models.indicator import Indicator
+    from app.models.monitored_asset import MonitoredAsset
 
 # Table de jointure many-to-many déclarée explicitement
 threat_indicators = Table(
@@ -37,8 +38,18 @@ class Threat(Base):
     stix_id: Mapped[str | None] = mapped_column(String(255), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # Institution camerounaise ciblée (clustering par institution) -- clé
+    # d'upsert stable, indépendante du nom affiché qui peut évoluer si de
+    # nouveaux mécanismes de détection s'ajoutent pour la même institution.
+    target_institution_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("monitored_assets.id", ondelete="SET NULL")
+    )
+
     indicators: Mapped[list["Indicator"]] = relationship(
         "Indicator",
         secondary=threat_indicators,
         back_populates="threats",
+    )
+    target_institution: Mapped["MonitoredAsset | None"] = relationship(
+        "MonitoredAsset",
     )

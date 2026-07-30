@@ -1,22 +1,22 @@
 """
 Moteur de clustering des indicateurs en entités Threat.
 
-Deux stratégies complémentaires :
+Un seul mécanisme de regroupement : l'institution camerounaise ciblée.
 
-1. Clustering par composantes connexes du graphe (Jour 20)
-   Chaque composante connexe de taille >= MIN_CLUSTER_SIZE devient
-   une Threat candidate.
+Les collecteurs de surveillance nationale (typosquat_monitor, ct_monitor,
+nrd_monitor) posent des tags typosquat:{slug} / ct:{slug} / nrd_watch:{slug}
+sur les IOCs qu'ils détectent, où {slug} est dérivé de l'institution
+MonitoredAsset visée : (acronym or name[:20]).lower().replace(' ', '_')
+(même convention que collectors/*.py et api/queries.py).
 
-2. Nommage par attribut dominant
-   Dans chaque cluster, on cherche :
-   - Le tag malware:* le plus fréquent → nom "Malware: Emotet"
-   - Sinon la source dominante → nom "Campaign: OpenPhish Cluster"
-   - Sinon un nom générique → "Unknown Cluster #N"
+Peu importe lequel de ces 3 mécanismes a détecté l'IOC, tous les IOCs visant
+la même institution rejoignent le même cluster. Un IOC sans aucun de ces
+tags n'appartient à aucun cluster (pas de "Unknown Cluster" fourre-tout).
 
-Principe de prudence :
-- On ne supprime jamais une Threat existante
-- On met à jour si le cluster évolue (nouveaux indicateurs)
-- MIN_CLUSTER_SIZE = 2 (un seul IOC ne fait pas une campagne)
+Les Threat sont des artefacts calculés, pas des observations primaires :
+à chaque exécution, le contenu d'un cluster-institution est recalculé et
+remplace intégralement l'ancien (un IOC qui n'est plus actif ou qui a perdu
+son tag institution sort naturellement du cluster).
 """
 from __future__ import annotations
 
@@ -24,104 +24,161 @@ import logging
 from collections import Counter
 from uuid import uuid4
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.models.enums import IndicatorStatus, ThreatType, TLPLevel
+from app.models.exposed_asset import ExposedAsset
 from app.models.indicator import Indicator
+from app.models.monitored_asset import MonitoredAsset
+from app.models.tag import Tag
 from app.models.threat import Threat
-from app.models.enums import ThreatType, TLPLevel
-from core.correlation import build_graph
 
 logger = logging.getLogger(__name__)
 
-MIN_CLUSTER_SIZE = 2      # Taille minimale pour former une Threat
-MAX_CLUSTER_SIZE = 500    # Garde-fou anti-explosion
+# Préfixes de tag posés par les collecteurs de surveillance nationale, et
+# libellés associés (utilisés pour le nom lisible et la description).
+MECHANISM_LABELS = {
+    "typosquat": "typosquatting",
+    "ct": "certificats suspects",
+    "nrd_watch": "domaines récents suspects",
+}
+MECHANISM_ORDER = ["typosquat", "ct", "nrd_watch"]
+
+MECHANISM_DESC_LABELS = {
+    "typosquat": "domaine(s) de typosquatting",
+    "ct": "certificat(s) suspect(s) détecté(s) par CT monitoring",
+    "nrd_watch": "domaine(s) nouvellement enregistré(s) suspect(s)",
+}
 
 
 # ---------------------------------------------------------------------------
-# Nommage des clusters
+# Résolution institution ← tag
 # ---------------------------------------------------------------------------
 
-def _dominant_malware_tag(indicators: list[Indicator]) -> str | None:
+def _slugify(asset: MonitoredAsset) -> str:
+    base = asset.acronym or asset.name[:20]
+    return base.lower().replace(" ", "_")
+
+
+def _build_institution_index(session: Session) -> dict[str, MonitoredAsset]:
     """
-    Retourne le tag malware:* le plus fréquent dans un cluster.
-    Ex: si 7/10 IOCs ont malware:emotet → "emotet"
+    slug → MonitoredAsset, même convention de slug que les collecteurs.
+    En cas de collision (deux institutions dont l'acronyme se slugifie
+    pareil), la première trouvée (ordre created_at) est conservée et un
+    warning est loggué -- pas de fusion silencieuse.
     """
-    tag_counts: Counter = Counter()
-    for ind in indicators:
-        for tag in (ind.tags or []):
-            if tag.name.startswith("malware:"):
-                family = tag.name.split(":", 1)[1]
-                tag_counts[family] += 1
-    if tag_counts:
-        return tag_counts.most_common(1)[0][0]
-    return None
-
-
-def _dominant_source(indicators: list[Indicator]) -> str | None:
-    """Retourne le nom de source le plus fréquent dans un cluster."""
-    source_counts: Counter = Counter()
-    for ind in indicators:
-        if ind.source:
-            source_counts[ind.source.name] += 1
-    if source_counts:
-        return source_counts.most_common(1)[0][0]
-    return None
-
-
-def _name_cluster(indicators: list[Indicator], cluster_index: int) -> tuple[str, ThreatType, str]:
-    """
-    Retourne (name, threat_type, description) pour un cluster.
-    Priorité : malware tag > source > générique
-    """
-    malware = _dominant_malware_tag(indicators)
-    if malware:
-        name = f"Malware: {malware.capitalize()}"
-        threat_type = ThreatType.malware
-        description = (
-            f"Cluster de {len(indicators)} indicateurs associés à la famille "
-            f"de malware {malware.capitalize()}. "
-            f"Généré automatiquement par corrélation de graphe."
-        )
-        return name, threat_type, description
-
-    source = _dominant_source(indicators)
-    if source:
-        name = f"Campaign: {source} Cluster #{cluster_index}"
-        threat_type = ThreatType.campaign
-        description = (
-            f"Cluster de {len(indicators)} indicateurs provenant principalement "
-            f"de la source {source}. "
-            f"Généré automatiquement par corrélation de graphe."
-        )
-        return name, threat_type, description
-
-    name = f"Unknown Cluster #{cluster_index}"
-    threat_type = ThreatType.campaign
-    description = (
-        f"Cluster de {len(indicators)} indicateurs corrélés sans attribut dominant identifié."
-    )
-    return name, threat_type, description
-
-
-# ---------------------------------------------------------------------------
-# Récupération des indicateurs d'un cluster
-# ---------------------------------------------------------------------------
-
-def _fetch_indicators(
-    session: Session,
-    indicator_ids: list[str],
-) -> list[Indicator]:
-    """Charge les Indicator depuis la DB pour une liste d'UUIDs."""
-    from app.models.enums import IndicatorStatus
-    indicators = (
-        session.query(Indicator)
-        .filter(
-            Indicator.id.in_(indicator_ids),
-            Indicator.status == IndicatorStatus.active,
-        )
+    assets = (
+        session.query(MonitoredAsset)
+        .order_by(MonitoredAsset.created_at, MonitoredAsset.id)
         .all()
     )
-    return indicators
+    index: dict[str, MonitoredAsset] = {}
+    for asset in assets:
+        slug = _slugify(asset)
+        if slug in index:
+            logger.warning(
+                "Collision de slug institution '%s' entre '%s' et '%s' -- "
+                "'%s' est conservée pour le clustering",
+                slug, index[slug].name, asset.name, index[slug].name,
+            )
+            continue
+        index[slug] = asset
+    return index
+
+
+def _resolve_institution(
+    indicator: Indicator,
+    institution_index: dict[str, MonitoredAsset],
+) -> tuple[MonitoredAsset, set[str]] | None:
+    """
+    Retourne (institution, mécanismes) pour un IOC, ou None s'il ne porte
+    aucun tag d'institution reconnu.
+
+    Si l'IOC porte des tags pour PLUSIEURS institutions distinctes (cas
+    ambigu, censé être rare), il est assigné à la première institution
+    trouvée (ordre alphabétique des tags, pour être déterministe) et un
+    warning est loggué -- pas de duplication dans deux clusters.
+    """
+    matches: list[tuple[MonitoredAsset, str]] = []
+    for tag in sorted(indicator.tags, key=lambda t: t.name):
+        if ":" not in tag.name:
+            continue
+        prefix, slug = tag.name.split(":", 1)
+        if prefix not in MECHANISM_LABELS:
+            continue
+        asset = institution_index.get(slug)
+        if asset is not None:
+            matches.append((asset, prefix))
+
+    if not matches:
+        return None
+
+    primary = matches[0][0]
+    distinct_institutions = {a.id for a, _ in matches}
+    if len(distinct_institutions) > 1:
+        logger.warning(
+            "IOC %s porte des tags visant plusieurs institutions distinctes "
+            "(%s) -- assigné à '%s' (première trouvée)",
+            indicator.value,
+            sorted({a.name for a, _ in matches}),
+            primary.name,
+        )
+
+    mechanisms = {prefix for asset, prefix in matches if asset.id == primary.id}
+    return primary, mechanisms
+
+
+def mechanism_counts_for_indicators(indicators: list[Indicator]) -> Counter:
+    """
+    Décompte, par mécanisme (typosquat/ct/nrd_watch), le nombre d'IOCs d'une
+    liste qui portent un tag de ce mécanisme. Réutilisable pour l'affichage
+    (api/queries.py) sans dupliquer la logique de scan des tags.
+    """
+    counts: Counter = Counter()
+    for ind in indicators:
+        mechanisms_seen: set[str] = set()
+        for tag in ind.tags:
+            if ":" not in tag.name:
+                continue
+            prefix, _slug = tag.name.split(":", 1)
+            if prefix in MECHANISM_LABELS:
+                mechanisms_seen.add(prefix)
+        for prefix in mechanisms_seen:
+            counts[prefix] += 1
+    return counts
+
+
+# ---------------------------------------------------------------------------
+# Nommage / description du cluster
+# ---------------------------------------------------------------------------
+
+def _build_name(asset: MonitoredAsset, mechanisms: set[str], has_exposed_assets: bool) -> str:
+    parts = [MECHANISM_LABELS[m] for m in MECHANISM_ORDER if m in mechanisms]
+    if has_exposed_assets:
+        parts.append("surface d'attaque")
+    if not parts:
+        return asset.name
+    return f"{asset.name} — {' + '.join(parts)}"
+
+
+def _build_description(
+    asset: MonitoredAsset,
+    mechanism_counts: dict[str, int],
+    indicator_count: int,
+    exposed_count: int,
+) -> str:
+    mech_phrases = [
+        f"{mechanism_counts[m]} {MECHANISM_DESC_LABELS[m]}"
+        for m in MECHANISM_ORDER if m in mechanism_counts
+    ]
+    description = (
+        f"{asset.name} est ciblée par {indicator_count} indicateur(s) : "
+        + ", ".join(mech_phrases) + "."
+    )
+    if exposed_count:
+        description += f" {exposed_count} IP(s) exposée(s) associée(s) à cette institution."
+    return description
 
 
 # ---------------------------------------------------------------------------
@@ -130,36 +187,42 @@ def _fetch_indicators(
 
 def _upsert_threat(
     session: Session,
-    name: str,
-    threat_type: ThreatType,
-    description: str,
+    asset: MonitoredAsset,
+    mechanism_counts: Counter,
     indicators: list[Indicator],
+    exposed_ips: list[str],
 ) -> Threat:
     """
-    Crée ou met à jour une Threat par son nom.
-    Ajoute les indicateurs du cluster à la Threat.
+    Upsert par target_institution_id (pas par nom) : le nom peut changer
+    d'une exécution à l'autre (nouveau mécanisme détecté) sans créer une
+    Threat orpheline en doublon.
     """
-    existing = session.query(Threat).filter_by(name=name).first()
+    existing = (
+        session.query(Threat)
+        .filter_by(target_institution_id=asset.id)
+        .first()
+    )
 
     if existing:
         threat = existing
-        logger.debug("Threat existante mise à jour : %s", name)
     else:
         threat = Threat()
         threat.id = uuid4()
-        threat.name = name
-        threat.threat_type = threat_type
+        threat.target_institution_id = asset.id
+        threat.threat_type = ThreatType.campaign
         threat.tlp = TLPLevel.CLEAR
         session.add(threat)
-        logger.info("Nouvelle Threat créée : %s (%s)", name, threat_type.value)
+        logger.info("Nouvelle Threat créée pour l'institution : %s", asset.name)
 
-    threat.description = description
+    threat.name = _build_name(asset, set(mechanism_counts), bool(exposed_ips))
+    threat.description = _build_description(
+        asset, mechanism_counts, len(indicators), len(exposed_ips)
+    )
 
-    # Ajouter les indicateurs sans doublons
-    existing_ids = {str(ind.id) for ind in threat.indicators}
-    for ind in indicators:
-        if str(ind.id) not in existing_ids:
-            threat.indicators.append(ind)
+    # Artefact calculé : le contenu du cluster est remplacé intégralement à
+    # chaque exécution (un IOC qui sort du périmètre -- inactif, retagué --
+    # doit disparaître du cluster, pas seulement en accumuler de nouveaux).
+    threat.indicators = indicators
 
     return threat
 
@@ -168,77 +231,89 @@ def _upsert_threat(
 # Orchestration principale
 # ---------------------------------------------------------------------------
 
-def extract_clusters(session: Session) -> list[dict]:
+def extract_clusters(session: Session, dry_run: bool = False) -> list[dict]:
     """
-    Extrait les clusters depuis le graphe de corrélation et
-    crée les entités Threat correspondantes.
+    Regroupe les IOCs actifs par institution ciblée (tags typosquat:/ct:/
+    nrd_watch:) et crée/met à jour les entités Threat correspondantes.
 
     Retourne une liste de dicts décrivant chaque cluster créé/mis à jour.
     """
-    import networkx as nx
-
-    logger.info("Construction du graphe de corrélation...")
-    G = build_graph(session)
-
-    if G.number_of_nodes() == 0:
-        logger.warning("Graphe vide — aucun cluster à extraire")
+    institution_index = _build_institution_index(session)
+    if not institution_index:
+        logger.warning("Aucune institution surveillée en base -- aucun cluster à extraire")
         return []
 
-    components = list(nx.connected_components(G))
+    candidate_indicators = (
+        session.query(Indicator)
+        .join(Indicator.tags)
+        .filter(
+            Indicator.status == IndicatorStatus.active,
+            or_(*[Tag.name.like(f"{p}:%") for p in MECHANISM_LABELS]),
+        )
+        .distinct()
+        .all()
+    )
     logger.info(
-        "%d composantes connexes trouvées (dont %d de taille >= %d)",
-        len(components),
-        sum(1 for c in components if len(c) >= MIN_CLUSTER_SIZE),
-        MIN_CLUSTER_SIZE,
+        "%d IOCs actifs candidats (portant un tag typosquat:/ct:/nrd_watch:)",
+        len(candidate_indicators),
     )
 
+    clusters: dict[str, dict] = {}
+    for indicator in candidate_indicators:
+        resolved = _resolve_institution(indicator, institution_index)
+        if resolved is None:
+            continue
+        asset, _mechanisms = resolved
+        bucket = clusters.setdefault(str(asset.id), {"asset": asset, "indicators": []})
+        bucket["indicators"].append(indicator)
+
+    logger.info("%d clusters-institution identifiés", len(clusters))
+
     results = []
-    cluster_index = 1
+    for bucket in sorted(clusters.values(), key=lambda b: len(b["indicators"]), reverse=True):
+        asset = bucket["asset"]
+        indicators = bucket["indicators"]
 
-    for component in sorted(components, key=len, reverse=True):
-        if len(component) < MIN_CLUSTER_SIZE:
-            continue
-        if len(component) > MAX_CLUSTER_SIZE:
-            logger.warning(
-                "Composante de taille %d > MAX_CLUSTER_SIZE=%d, tronquée",
-                len(component), MAX_CLUSTER_SIZE,
-            )
-            component = set(list(component)[:MAX_CLUSTER_SIZE])
+        mechanism_counts = mechanism_counts_for_indicators(indicators)
 
-        # Charger les indicateurs depuis la DB
-        indicator_ids = list(component)
-        indicators = _fetch_indicators(session, indicator_ids)
+        exposed = (
+            session.query(ExposedAsset)
+            .filter(ExposedAsset.monitored_asset_id == asset.id)
+            .all()
+        )
+        exposed_ips = [e.ip_address for e in exposed]
 
-        if len(indicators) < MIN_CLUSTER_SIZE:
-            # Les indicateurs peuvent être expirés ou supprimés
-            continue
+        threat = _upsert_threat(session, asset, mechanism_counts, indicators, exposed_ips)
+        session.flush()
 
-        # Charger les tags pour le nommage
-        for ind in indicators:
-            _ = ind.tags  # force le chargement lazy
-
-        name, threat_type, description = _name_cluster(indicators, cluster_index)
-
-        threat = _upsert_threat(session, name, threat_type, description, indicators)
-        session.flush()  # obtenir l'ID sans commiter
+        first_seen = min(
+            (ind.first_seen for ind in indicators if ind.first_seen is not None),
+            default=None,
+        )
 
         results.append({
-            "threat_id":      str(threat.id),
-            "name":           name,
-            "threat_type":    threat_type.value,
+            "threat_id": str(threat.id),
+            "name": threat.name,
+            "threat_type": threat.threat_type.value,
+            "institution": asset.name,
             "indicator_count": len(indicators),
-            "cluster_size":   len(component),
+            "mechanism_counts": dict(mechanism_counts),
+            "exposed_ip_count": len(exposed_ips),
+            "first_seen": first_seen.isoformat() if first_seen else None,
         })
 
-        cluster_index += 1
+    if dry_run:
+        session.rollback()
+        logger.info("[DRY-RUN] %d Threats auraient été créées/mises à jour", len(results))
+    else:
+        session.commit()
+        logger.info("%d Threats créées/mises à jour", len(results))
 
-    session.commit()
-    logger.info("%d Threats créées/mises à jour", len(results))
     return results
 
 
 # ---------------------------------------------------------------------------
-# Endpoint interne : get_threat(indicator)
+# Endpoint interne : get_threats_for_indicator(indicator)
 # ---------------------------------------------------------------------------
 
 def get_threats_for_indicator(

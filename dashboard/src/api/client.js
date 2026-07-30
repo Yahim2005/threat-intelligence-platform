@@ -20,8 +20,7 @@ export function getAuthToken() {
 }
 
 function authHeaders() {
-  const apiKey = import.meta.env.VITE_API_KEY || ''
-  const headers = apiKey ? { 'X-API-Key': apiKey } : {}
+  const headers = {}
   if (authToken) headers['Authorization'] = `Bearer ${authToken}`
   return headers
 }
