@@ -9,6 +9,7 @@ import { ArrowUpRight, Download, TrendingUp, Shield, Database, Activity, AlertTr
 import { api, getAuthToken } from '../api/client'
 import AlertsPanel from '../components/AlertsPanel'
 import ThreatGlobe from '../components/ThreatGlobe'
+import TechInfoPanel from '../components/TechInfoPanel'
 const TYPE_COLORS = ['#8b7355','#c4a882','#d4b896','#a0845c','#6b5740','#e8d5b7','#bfa07a']
 const TLP_COLORS  = { CLEAR: '#9ca3af', GREEN: '#40916c', AMBER: '#f59e0b', AMBER_STRICT: '#f97316', RED: '#ef4444' }
 
@@ -203,6 +204,19 @@ export default function Overview({ onOpenDetail, onNavigate }) {
           </div>
         </div>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Cette page affiche les indicateurs clés agrégés de toute la plateforme (nombre total
+          d'IOCs actifs, clusters de menaces, sources de collecte) et un globe 3D géolocalisant
+          les IOCs de type IP via GeoIP.
+        </p>
+        <p>
+          Les boutons d'export (STIX 2.1, CSV, Blocklist) téléchargent un instantané complet des
+          indicateurs actifs au-dessus d'un seuil de confidence — authentifiés par votre session
+          (JWT), séparément du système de clés API réservé aux partenaires externes.
+        </p>
+      </TechInfoPanel>
 
       {/* ── Surveillance nationale ──────────────────────────────── */}
       {cameroon && (

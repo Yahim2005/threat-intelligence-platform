@@ -1,6 +1,7 @@
 // src/pages/Threats.jsx
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import TechInfoPanel from '../components/TechInfoPanel'
 import { Shield, ChevronLeft, ChevronRight, ArrowUpRight, Tag, Building2 } from 'lucide-react'
 
 const MECHANISM_LABELS = {
@@ -147,6 +148,24 @@ export default function Threats({ onOpenThreat }) {
           Clusters de menaces corrélés automatiquement
         </p>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Chaque menace (Threat) affichée ici représente une institution camerounaise réellement
+          ciblée par une campagne détectée — typosquatting, certificat SSL suspect, ou domaine
+          nouvellement enregistré suspect (tags typosquat:*/ct:*/nrd_watch:* posés par les
+          collecteurs de surveillance nationale).
+        </p>
+        <p>
+          Contrairement à une première version du moteur (basée sur des co-occurrences techniques
+          faibles comme « même source de collecte »), chaque cluster ici correspond à un événement
+          concret et actionnable : aucune institution ciblée, aucune Threat générée.
+        </p>
+        <p>
+          Chaque fiche est enrichie des IPs exposées de la même institution et de la date de
+          première observation.
+        </p>
+      </TechInfoPanel>
 
       {/* ── Filtre par score ─────────────────────────────────── */}
 <div className="bg-white rounded-2xl border border-[#ede8e3] px-5 py-4 flex items-center gap-4 flex-wrap">

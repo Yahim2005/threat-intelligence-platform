@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { api } from '../api/client'
 import TLPBadge from '../components/TLPBadge'
+import TechInfoPanel from '../components/TechInfoPanel'
 import { Database, CheckCircle, XCircle, ExternalLink, ArrowUpRight } from 'lucide-react'
 
 // ── Barre de volume relative ──────────────────────────────────────
@@ -112,6 +113,14 @@ export default function Sources() {
           </p>
         </div>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Liste des sources de collecte intégrées (OSINT généralistes et modules de surveillance
+          nationale spécifiques au Cameroun), avec le statut et la date du dernier cycle de
+          collecte pour chacune.
+        </p>
+      </TechInfoPanel>
 
       {/* ── Stat rapide ───────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-4">

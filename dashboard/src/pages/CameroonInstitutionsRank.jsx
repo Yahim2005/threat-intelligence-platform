@@ -6,6 +6,7 @@ import DetailModal from '../components/DetailModal'
 import {
   CATEGORY_LABELS, SeverityBadge, InstitutionRankRow,
 } from '../components/cameroon/Shared'
+import TechInfoPanel from '../components/TechInfoPanel'
 
 const PAGE_SIZE = 20
 
@@ -59,6 +60,14 @@ export default function CameroonInstitutionsRank({ onBack }) {
         </h1>
         <p className="text-sm text-gray-400 mt-0.5">{filtered.length} institutions avec un signal actif</p>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Classement complet des institutions camerounaises surveillées par score de risque
+          composé (voir la page Cameroun pour le détail de la formule). Seules les institutions
+          avec au moins un signal réel (score supérieur à zéro) apparaissent ici.
+        </p>
+      </TechInfoPanel>
 
       <div className="flex gap-2 flex-wrap">
         {[{ v: '', l: 'Toutes' }, ...Object.entries(CATEGORY_LABELS).map(([v, l]) => ({ v, l }))].map(({ v, l }) => (

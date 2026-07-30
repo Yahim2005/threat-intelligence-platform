@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import DetailModal from '../components/DetailModal'
 import { SeverityBadge, TyposquatRow, TyposquatMetadata } from '../components/cameroon/Shared'
+import TechInfoPanel from '../components/TechInfoPanel'
 
 const PAGE_SIZE = 20
 
@@ -69,6 +70,16 @@ export default function CameroonTyposquat({ onBack, onOpenDetail }) {
         </h1>
         <p className="text-sm text-gray-400 mt-0.5">{total} domaines détectés</p>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Liste complète des domaines suspects détectés par typosquatting. La distinction
+          « confirmé » / « potentiel » dépend de la longueur du nom de domaine cible : un nom
+          court (4 caractères ou moins, comme un sigle) génère statistiquement beaucoup de
+          variantes coïncidentes sans rapport réel avec l'institution — ces cas sont marqués
+          « potentiel » pour signaler une confiance moindre, à vérifier manuellement.
+        </p>
+      </TechInfoPanel>
 
       <div className="flex gap-2">
         {['confirmed', 'potential'].map(f => (

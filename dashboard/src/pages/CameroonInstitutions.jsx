@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, HelpCircle, XCircle, Info } from 'lucide-react
 import { api } from '../api/client'
 import DetailModal from '../components/DetailModal'
 import { CATEGORY_LABELS, InstitutionRow } from '../components/cameroon/Shared'
+import TechInfoPanel from '../components/TechInfoPanel'
 
 const PAGE_SIZE = 20
 const STORAGE_KEY = 'cameroon_exposed_institution_filter'
@@ -46,6 +47,21 @@ export default function CameroonInstitutions({ onBack, onNavigate }) {
         </h1>
         <p className="text-sm text-gray-400 mt-0.5">{filtered.length} institutions</p>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Référentiel complet des institutions camerounaises surveillées (ministères, banques,
+          télécoms, sociétés publiques). Chaque domaine porte un statut de vérification :
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Confirmé — vérifié manuellement</li>
+          <li>À confirmer — candidat probable, jamais vérifié</li>
+          <li>
+            Non retenu — domaine investigué et confirmé comme inexistant ou inactif
+            (automatiquement exclu des scans de typosquatting et de certificats)
+          </li>
+        </ul>
+      </TechInfoPanel>
 
       <div className="flex gap-2 flex-wrap">
         {[{ v: '', l: 'Toutes' }, ...Object.entries(CATEGORY_LABELS).map(([v, l]) => ({ v, l }))].map(({ v, l }) => (

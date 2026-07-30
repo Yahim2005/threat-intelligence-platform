@@ -8,6 +8,7 @@ import {
 import { api } from '../api/client'
 import TLPBadge from '../components/TLPBadge'
 import StatusBadge from '../components/StatusBadge'
+import TechInfoPanel from '../components/TechInfoPanel'
 
 // ── Badge de risque ───────────────────────────────────────────────
 function RiskBadge({ confidence }) {
@@ -119,6 +120,20 @@ export default function IndicatorDetail({ value, onBack }) {
           <RiskBadge confidence={ind.confidence} />
         </div>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Fiche détaillée d'un indicateur, avec le détail du calcul de confidence (contribution
+          de chaque composante), ses tags, et les indicateurs liés.
+        </p>
+        <p>
+          Un lien technique existe entre deux IOCs dans deux cas précis : une résolution DNS
+          partagée (domaine vers IP), ou un tag malware:* commun. Ces liens sont uniquement
+          informatifs sur cette fiche — ils ne regroupent plus les IOCs en clusters de menaces
+          (voir la page Threats pour cette logique, différente depuis la refonte du moteur de
+          clustering).
+        </p>
+      </TechInfoPanel>
 
       {/* ── Grille infos + score ──────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">

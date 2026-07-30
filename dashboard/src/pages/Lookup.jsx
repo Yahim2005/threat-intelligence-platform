@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import TLPBadge from '../components/TLPBadge'
 import StatusBadge from '../components/StatusBadge'
+import TechInfoPanel from '../components/TechInfoPanel'
 import { Search, ShieldCheck, ShieldAlert, ShieldX, Loader, AlertTriangle } from 'lucide-react'
 
 function RiskBadge({ confidence }) {
@@ -121,6 +122,15 @@ export default function Lookup({ initialQuery = '' }) {
           Vérifie si une IP, un domaine, un email, un numéro de téléphone ou un hash est référencé dans notre base de menaces.
         </p>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Recherche manuelle d'un indicateur précis (domaine, IP, hash, URL, téléphone...). Les
+          numéros de téléphone camerounais sont normalisés automatiquement au format
+          international (E.164) même saisis localement, pour retrouver un indicateur déjà
+          normalisé en base.
+        </p>
+      </TechInfoPanel>
 
       {/* Avertissement liens non sûrs */}
       <div className="flex items-start gap-2.5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">

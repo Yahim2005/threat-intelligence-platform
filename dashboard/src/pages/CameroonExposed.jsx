@@ -4,6 +4,7 @@ import { ArrowLeft, X } from 'lucide-react'
 import { api } from '../api/client'
 import DetailModal from '../components/DetailModal'
 import { SeverityBadge, ExposedRankRow } from '../components/cameroon/Shared'
+import TechInfoPanel from '../components/TechInfoPanel'
 
 const PAGE_SIZE = 20
 const STORAGE_KEY = 'cameroon_exposed_institution_filter'
@@ -50,6 +51,17 @@ export default function CameroonExposed({ onBack }) {
         </h1>
         <p className="text-sm text-gray-400 mt-0.5">{total} IPs exposées identifiées</p>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Surface d'attaque exposée des institutions camerounaises. Les adresses IP proviennent
+          des préfixes réellement annoncés par chaque opérateur (via RIPEstat), et chaque IP est
+          vérifiée auprès de Shodan InternetDB — un service passif qui restitue ce qui a déjà été
+          observé publiquement sur Internet, sans qu'aucun scan actif ne soit effectué depuis
+          cette plateforme. Le niveau de risque dépend des ports sensibles ouverts (ex: RDP,
+          bases de données exposées) et des vulnérabilités (CVE) déjà associées à l'IP.
+        </p>
+      </TechInfoPanel>
 
       {institutionFilter && (
         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#8b7355] text-white">

@@ -6,6 +6,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { Plus, X, Search, ChevronLeft, ChevronRight, Trash2, Copy, AlertTriangle } from 'lucide-react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import TechInfoPanel from '../components/TechInfoPanel'
 
 const CATEGORY_LABELS = {
   ministry: 'Ministère',
@@ -891,6 +892,16 @@ export default function Admin() {
           </button>
         )}
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Interface d'administration réservée aux administrateurs : gestion du référentiel des
+          institutions (création, édition, statut de domaine), déclenchement manuel des
+          collecteurs et des tâches de post-traitement (corrélation, clustering, recalcul des
+          scores), gestion des clés API des partenaires externes, et gestion des destinataires du
+          digest email automatique.
+        </p>
+      </TechInfoPanel>
 
       <div className="flex gap-2">
         {[{ v: 'institutions', l: 'Référentiel' }, { v: 'jobs', l: 'Collecte & traitement' }, { v: 'api-clients', l: 'Partenaires API' }, { v: 'email-recipients', l: 'Destinataires email' }].map(({ v, l }) => (

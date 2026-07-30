@@ -1,6 +1,7 @@
 // src/pages/Health.jsx
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import TechInfoPanel from '../components/TechInfoPanel'
 import {
   Activity, CheckCircle, AlertCircle, Zap,
   TrendingUp, Database, RefreshCw, Clock
@@ -114,6 +115,14 @@ export default function Health() {
           </button>
         </div>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Métriques opérationnelles de l'API (latences, volumétrie de requêtes) et historique des
+          exécutions de collecte, utiles pour diagnostiquer un problème de disponibilité ou de
+          performance.
+        </p>
+      </TechInfoPanel>
 
       {/* ── Statut global ─────────────────────────────────────── */}
       <div className={`rounded-2xl border p-5 flex items-center gap-4 ${

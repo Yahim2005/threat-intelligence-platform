@@ -7,6 +7,7 @@ import {
 import { Database, Tag, BarChart2, TrendingUp, MapPin, Server, Globe2, Shield } from 'lucide-react'
 import { api } from '../api/client'
 import { CveDonut, CATEGORY_LABELS } from '../components/cameroon/Shared'
+import TechInfoPanel from '../components/TechInfoPanel'
 
 const BEIGE_PALETTE = [
   '#8b7355','#c4a882','#a0845c','#6b5740','#d4b896',
@@ -93,6 +94,15 @@ export default function Analytics() {
           vulnérabilités, tendance des détections).
         </p>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Vue agrégée : sources et tags les plus fréquents, distribution des scores de confidence,
+          et une section dédiée au Cameroun (répartition par secteur d'institution, ports les
+          plus exposés, sévérité des CVE détectées, chronologie des détections, classement des
+          institutions par score de risque).
+        </p>
+      </TechInfoPanel>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
 

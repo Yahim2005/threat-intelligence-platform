@@ -15,6 +15,7 @@ import {
   CATEGORY_LABELS, SeverityBadge, RiskGauge, InstitutionRankRow,
   TyposquatRow, ExposedRankRow, InstitutionRow, CveDonut, TyposquatMetadata,
 } from '../components/cameroon/Shared'
+import TechInfoPanel from '../components/TechInfoPanel'
 
 function QuickNav({ sections, active }) {
   return (
@@ -189,6 +190,32 @@ export default function Cameroon({ onOpenDetail, onNavigate }) {
           banques, opérateurs télécom et sociétés publiques.
         </p>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Vue d'ensemble de la surveillance nationale, structurée autour de 4 mécanismes
+          indépendants :
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>
+            Typosquatting — dnstwist, permutations de caractères + dictionnaire de mots-clés
+            phishing + variantes de TLD
+          </li>
+          <li>Certificats SSL suspects — crt.sh, recherche par mot-clé de marque</li>
+          <li>
+            Domaines nouvellement enregistrés suspects — WhoisDS.com, alternative gratuite à crt.sh
+          </li>
+          <li>
+            Surface d'attaque exposée — RIPEstat pour les préfixes IP annoncés, Shodan InternetDB
+            pour les ports/CVE déjà observés passivement (aucun scan actif n'est effectué)
+          </li>
+        </ul>
+        <p>
+          Le score de risque par institution combine ces signaux : (typosquats × 3) + (IPs
+          exposées à haut risque × 3) + (IPs à risque moyen × 1) + (certificats suspects × 2), en
+          excluant les faux positifs confirmés (statut whitelisted).
+        </p>
+      </TechInfoPanel>
 
       {fpMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#2c1810] text-white text-sm px-4 py-3 rounded-xl shadow-xl">

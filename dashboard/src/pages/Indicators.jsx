@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import TLPBadge from '../components/TLPBadge'
 import StatusBadge from '../components/StatusBadge'
+import TechInfoPanel from '../components/TechInfoPanel'
 import { ChevronLeft, ChevronRight, Search, X, SlidersHorizontal } from 'lucide-react'
 
 const TYPES    = ['ip', 'domain', 'url', 'md5', 'sha1', 'sha256', 'cve', 'email', 'cidr', 'phone']
@@ -128,6 +129,27 @@ export default function Indicators({ onOpenDetail }) {
           </button>
         )}
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Liste paginée et filtrable de tous les indicateurs de compromission (IOCs) actifs. Le
+          score de confidence (0-100) est calculé par un algorithme à 7 composantes pondérées :
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Fiabilité de la source — 22%</li>
+          <li>Corroboration par plusieurs sightings — 18%</li>
+          <li>Diversité des sources — 17%</li>
+          <li>Fiabilité intrinsèque du type d'IOC — 16%</li>
+          <li>Récence — 14%</li>
+          <li>Présence d'un tag malware — 8%</li>
+          <li>Réputation externe résiduelle — 5%</li>
+        </ul>
+        <p>
+          Ce score n'est pas recalculé en temps réel à chaque affichage : il est recalculé
+          périodiquement pour l'ensemble de la base (scripts/recalculate_scores.py), pour
+          refléter l'évolution de la récence et des nouvelles corroborations.
+        </p>
+      </TechInfoPanel>
 
       {/* ── Panneau de filtres ────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-[#ede8e3] p-5 space-y-4">

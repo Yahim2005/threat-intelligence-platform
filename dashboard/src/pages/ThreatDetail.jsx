@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { api } from '../api/client'
 import TLPBadge from '../components/TLPBadge'
 import StatusBadge from '../components/StatusBadge'
+import TechInfoPanel from '../components/TechInfoPanel'
 
 const BEIGE_PALETTE = ['#8b7355','#c4a882','#a0845c','#6b5740','#d4b896','#bfa07a','#e8d5b7']
 
@@ -130,6 +131,15 @@ export default function ThreatDetail({ threatId, onBack, onOpenDetail }) {
           </div>
         </div>
       </div>
+
+      <TechInfoPanel>
+        <p>
+          Détail d'une menace : l'institution ciblée, le décompte d'indicateurs par mécanisme de
+          détection (typosquatting, certificats, domaines récents), les IPs exposées associées à
+          cette même institution (surface d'attaque), et la liste complète des indicateurs
+          membres du cluster.
+        </p>
+      </TechInfoPanel>
 
       {/* ── Grille infos + graphe ─────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
