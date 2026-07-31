@@ -112,9 +112,22 @@ def build_digest_html(indicators: list[Indicator]) -> str:
     rows_html: list[str] = []
     for ind in indicators:
         value = html.escape(ind.value)
+        tag_names = {t.name for t in ind.tags}
+        # Signal court (sigle <=4 caracteres) : le typosquat monitor le
+        # marque lui-meme comme "potential" plutot que "confirmed", trop de
+        # collisions statistiques possibles pour etre fiable sans verification
+        # manuelle. On le garde visible (le signal peut etre reel) mais on le
+        # signale clairement au lecteur plutot que de le faire disparaitre.
+        needs_review = "typosquat:potential" in tag_names
+        if needs_review:
+            value = (
+                f'{value} <span style="display:inline-block;margin-left:6px;'
+                f'padding:1px 6px;border-radius:8px;background:#fef3c7;'
+                f'color:#92400e;font-size:10px;font-weight:bold;">A VERIFIER</span>'
+            )
         first_seen = ind.first_seen.strftime("%Y-%m-%d %H:%M") if ind.first_seen else "—"
         threat_name = html.escape(_threat_name_for(ind))
-        tags = html.escape(", ".join(sorted(t.name for t in ind.tags)) or "—")
+        tags = html.escape(", ".join(sorted(tag_names)) or "—")
         source = html.escape(ind.source.name if ind.source else "—")
         rows_html.append(f"""
           <tr>

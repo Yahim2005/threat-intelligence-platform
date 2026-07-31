@@ -4,8 +4,8 @@
 import { useState } from 'react'
 import { Info, ChevronDown } from 'lucide-react'
 
-export default function TechInfoPanel({ title = 'Comment ça marche', children }) {
-  const [open, setOpen] = useState(false)
+export default function TechInfoPanel({ title = 'Comment ça marche', defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen)
 
   return (
     <div className="bg-white rounded-2xl border border-[#ede8e3] overflow-hidden">

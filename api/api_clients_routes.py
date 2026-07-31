@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from api import schemas
 from api.auth import get_db, require_admin
-from app.api_clients import create_api_client
+from app.api_clients import create_api_client, regenerate_api_client
 from app.models.api_client import ApiClient
 from app.models.user import User
 
@@ -84,3 +84,29 @@ def revoke_api_client(
     db.commit()
     db.refresh(client)
     return _to_response(client)
+
+
+@router.post("/{client_id}/regenerate", response_model=schemas.ApiClientCreateResponse)
+def regenerate_api_client_route(
+    client_id: str,
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
+):
+    """Génère une nouvelle clé pour ce partenaire -- l'ancienne cesse de
+    fonctionner immédiatement (seul le hash est stocké : impossible de
+    réafficher l'ancienne, c'est pourquoi on en émet une nouvelle). La
+    nouvelle clé est renvoyée en clair UNE SEULE FOIS, dans cette réponse."""
+    client = db.query(ApiClient).filter(ApiClient.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client API introuvable.")
+
+    raw_key = regenerate_api_client(db, client)
+    return schemas.ApiClientCreateResponse(
+        id=str(client.id),
+        name=client.name,
+        contact_email=client.contact_email,
+        is_active=client.is_active,
+        created_at=client.created_at,
+        last_used_at=client.last_used_at,
+        api_key=raw_key,
+    )

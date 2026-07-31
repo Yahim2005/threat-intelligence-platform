@@ -16,3 +16,4 @@ from app.models.exposed_asset import ExposedAsset, ExposedAssetScanProgress
 from app.models.api_client import ApiClient
 from app.models.email_recipient import EmailRecipient
 from app.models.email_digest_log import EmailDigestLog
+from app.models.admin_job_run import AdminJobRun

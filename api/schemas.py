@@ -362,3 +362,8 @@ class EmailRecipientResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class EmailDigestStatusResponse(BaseModel):
+    eligible_count: int
+    last_sent_at: Optional[datetime]

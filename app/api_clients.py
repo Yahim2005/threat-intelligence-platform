@@ -42,3 +42,18 @@ def create_api_client(db: Session, name: str, contact_email: str | None) -> tupl
     db.commit()
     db.refresh(client)
     return client, raw_key
+
+
+def regenerate_api_client(db: Session, client: ApiClient) -> str:
+    """Génère une nouvelle clé pour un client EXISTANT (même id/name/
+    contact_email) et invalide l'ancienne immédiatement -- seul moyen de
+    "réafficher" une clé, puisque seul le hash est stocké (voir
+    app/models/api_client.py). Renvoie la nouvelle clé en clair, une seule
+    fois, comme create_api_client."""
+    raw_key = generate_api_key()
+    client.key_hash = hash_api_key(raw_key)
+    client.key_prefix = raw_key[:12]
+    client.last_used_at = None
+    db.commit()
+    db.refresh(client)
+    return raw_key

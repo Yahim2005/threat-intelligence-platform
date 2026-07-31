@@ -12,7 +12,6 @@ from app.models.enums import UserRole
 from app.security import hash_password, verify_password, create_access_token
 from api.auth import get_current_user, require_admin
 import time
-import subprocess
 from pathlib import Path
 from collections import defaultdict
 from typing import Optional
@@ -27,6 +26,8 @@ from sqlalchemy import text
 from app.database import SessionLocal
 from app.logger import setup_logging, get_logger
 from app.models import Indicator
+from app.models.admin_job_run import AdminJobRun
+from app.admin_job_runner import launch_tracked_job, launch_run_all_sequence
 from api import queries, schemas, exports, taxii, api_clients_routes, email_recipients_routes
 from api.rate_limit import limiter, rate_limit_exceeded_handler
 
@@ -79,6 +80,7 @@ app.include_router(exports.router)
 app.include_router(taxii.router)
 app.include_router(api_clients_routes.router)
 app.include_router(email_recipients_routes.router)
+app.include_router(email_recipients_routes.digest_router)
 
 
 # ─── Middleware : log + métriques de chaque requête ───────────────────────────
@@ -733,38 +735,103 @@ ADMIN_JOBS = {
     "recalculate_scores": "scripts.recalculate_scores",
 }
 
+# Nom EXACT de la source en base (scripts/seeds.py) pour chaque collecteur --
+# remplace l'ancienne recherche ILIKE '%{module_name}%' qui comparait le nom
+# du module Python (ex: nrd_monitor) au nom réel de la source (ex: "Newly
+# Registered Domains Monitor") : ces deux chaînes ne se ressemblent pas
+# textuellement, la recherche échouait silencieusement pour presque tous les
+# collecteurs (seul typosquat_monitor "marchait", par coïncidence -- le '_'
+# est un joker SQL qui matche l'espace dans "Typosquat Monitor").
+JOB_SOURCE_NAMES = {
+    "urlhaus": "abuse.ch - URLhaus",
+    "feodo": "abuse.ch - Feodo",
+    "threatfox": "abuse.ch - ThreatFox",
+    "spamhaus": "Spamhaus - DROP",
+    "cisa_kev": "CISA KEV",
+    "tor_exit": "Tor Project - Exit List",
+    "otx": "AlienVault OTX",
+    "otx_africa": "AlienVault OTX Africa",
+    "openphish": "OpenPhish",
+    "malwarebazaar": "abuse.ch - MalwareBazaar",
+    "nvd": "NVD",
+    "typosquat_monitor": "Typosquat Monitor (dnstwist)",
+    "nrd_monitor": "Newly Registered Domains Monitor",
+    "ct_monitor": "Certificate Transparency Monitor (crt.sh)",
+}
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _admin_job_run_to_last_run(run: AdminJobRun) -> dict:
+    return {
+        "status": run.status,
+        "started_at": str(run.started_at),
+        "finished_at": str(run.finished_at) if run.finished_at else None,
+        "detail": run.detail,
+    }
 
 
 @app.get("/admin/jobs", tags=["Admin"])
 def list_admin_jobs(user: User = Depends(require_admin)):
     """Liste les jobs declenchables manuellement, avec le statut de leur
-    derniere execution connue (via collection_runs pour les collecteurs)."""
+    derniere execution connue.
+
+    admin_job_runs (jobs declenches depuis cette interface) est prioritaire
+    des qu'une ligne existe pour ce job ; sinon, pour les collecteurs,
+    fallback sur collection_runs (nom de source exact, voir JOB_SOURCE_NAMES)
+    -- utile pour les collecteurs qui n'ont encore jamais ete declenches
+    depuis l'admin mais tournent via le cron GitHub Actions."""
     session = SessionLocal()
     try:
         results = []
         for job_name, module_path in ADMIN_JOBS.items():
             last_run = None
-            if module_path.startswith("collectors."):
-                row = session.execute(text("""
-                    SELECT cr.status, cr.started_at, cr.finished_at,
-                           cr.items_created, cr.items_updated, cr.items_errors
-                    FROM collection_runs cr
-                    JOIN sources s ON s.id = cr.source_id
-                    JOIN (
-                        SELECT DISTINCT ON (source_id) *
-                        FROM collection_runs
-                        ORDER BY source_id, started_at DESC
-                    ) latest ON latest.id = cr.id
-                    WHERE s.name ILIKE :pattern
-                    LIMIT 1
-                """), {"pattern": f"%{module_path.split('.')[-1]}%"}).fetchone()
-                if row:
-                    last_run = {
-                        "status": row[0], "started_at": str(row[1]), "finished_at": str(row[2]) if row[2] else None,
-                        "created": row[3], "updated": row[4], "errors": row[5],
-                    }
+
+            admin_run = (
+                session.query(AdminJobRun)
+                .filter_by(job_name=job_name)
+                .order_by(AdminJobRun.started_at.desc())
+                .first()
+            )
+            if admin_run:
+                last_run = _admin_job_run_to_last_run(admin_run)
+            elif module_path.startswith("collectors."):
+                exact_name = JOB_SOURCE_NAMES.get(job_name)
+                if exact_name:
+                    row = session.execute(text("""
+                        SELECT cr.status, cr.started_at, cr.finished_at,
+                               cr.items_created, cr.items_updated, cr.items_errors
+                        FROM collection_runs cr
+                        JOIN sources s ON s.id = cr.source_id
+                        JOIN (
+                            SELECT DISTINCT ON (source_id) *
+                            FROM collection_runs
+                            ORDER BY source_id, started_at DESC
+                        ) latest ON latest.id = cr.id
+                        WHERE s.name = :name
+                        LIMIT 1
+                    """), {"name": exact_name}).fetchone()
+                    if row:
+                        last_run = {
+                            "status": row[0], "started_at": str(row[1]), "finished_at": str(row[2]) if row[2] else None,
+                            "created": row[3], "updated": row[4], "errors": row[5],
+                        }
             results.append({"job_name": job_name, "type": "collector" if module_path.startswith("collectors.") else "post-processing", "last_run": last_run})
+
+        # "Lancer tout" (voir run_admin_job) : séquence multi-étapes, suivie
+        # uniquement via admin_job_runs (pas de collection_runs équivalent).
+        run_all = (
+            session.query(AdminJobRun)
+            .filter_by(job_name="run_all")
+            .order_by(AdminJobRun.started_at.desc())
+            .first()
+        )
+        results.append({
+            "job_name": "run_all",
+            "type": "sequence",
+            "last_run": _admin_job_run_to_last_run(run_all) if run_all else None,
+        })
+
         return results
     finally:
         session.close()
@@ -774,22 +841,20 @@ def list_admin_jobs(user: User = Depends(require_admin)):
 @limiter.limit("10/minute")
 def run_admin_job(job_name: str, request: Request, user: User = Depends(require_admin)):
     """Declenche un job en arriere-plan (collecteur ou post-traitement).
-    Ne bloque pas la reponse HTTP : le job tourne independamment, son statut
-    se consulte ensuite via GET /admin/jobs (collecteurs) ou les logs serveur
-    (correlation/clustering)."""
+    Ne bloque pas la reponse HTTP : une ligne admin_job_runs est creee
+    immediatement (running), un thread de fond la met a jour a la fin du
+    sous-processus -- le statut se consulte ensuite via GET /admin/jobs."""
+    if job_name == "run_all":
+        steps = [(name, module_path) for name, module_path in ADMIN_JOBS.items()]
+        launch_run_all_sequence("run_all", steps)
+        return {"message": "Séquence complète lancée en arrière-plan.", "steps": len(steps)}
+
     if job_name not in ADMIN_JOBS:
         raise HTTPException(status_code=404, detail=f"Job inconnu : {job_name}")
 
     module_path = ADMIN_JOBS[job_name]
     try:
-        subprocess.Popen(
-            ["python", "-m", module_path],
-            cwd=str(REPO_ROOT),
-            env=_os.environ.copy(),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        launch_tracked_job(job_name, ["python", "-m", module_path])
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Impossible de lancer le job : {e}")
 
