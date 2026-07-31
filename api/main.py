@@ -730,6 +730,7 @@ ADMIN_JOBS = {
     "typosquat_monitor": "collectors.typosquat_monitor",
     "nrd_monitor": "collectors.nrd_monitor",
     "ct_monitor": "collectors.ct_monitor",
+    "scan_attack_surface": "scripts.scan_attack_surface",
     "run_correlation": "scripts.run_correlation",
     "run_clustering": "scripts.run_clustering",
     "recalculate_scores": "scripts.recalculate_scores",

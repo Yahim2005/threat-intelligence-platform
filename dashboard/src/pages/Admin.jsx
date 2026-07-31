@@ -280,6 +280,7 @@ const JOB_GROUPS = [
       { name: 'typosquat_monitor', label: 'Typosquat Monitor' },
       { name: 'nrd_monitor', label: 'Domaines nouvellement enregistrés' },
       { name: 'ct_monitor', label: 'Certificate Transparency (crt.sh)' },
+      { name: 'scan_attack_surface', label: "Surface d'attaque (RIPEstat + Shodan InternetDB)" },
     ],
   },
   {
