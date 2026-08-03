@@ -5,7 +5,7 @@ sans connaissance préalable du projet. Il a été testé réellement (voir la
 section « Validation » en fin de document) sur une base PostgreSQL locale
 vidée puis reconstruite en suivant exactement les étapes ci-dessous.
 
-Suivre les étapes **dans l'ordre**. Chaque section indique ce qui casse si on
+Suivre les étapes. Chaque section indique ce qui casse si on
 saute une étape.
 
 ---
@@ -67,6 +67,16 @@ C'est la valeur de `DATABASE_URL` (section suivante).
 
 Copier `.env.example` en `.env` à la racine du dépôt et renseigner les
 valeurs réelles. **Ne jamais committer `.env`** (déjà dans `.gitignore`).
+
+Limiter aussi sa lecture au compte système qui exécute la TIP :
+
+```bash
+chmod 600 .env
+```
+
+Le modèle `.env.example` ne contient aucun secret réel et peut rester en
+`644`. Sur un serveur partagé, créer les nouveaux fichiers secrets avec
+`umask 077` ou utiliser le gestionnaire de secrets de l'infrastructure.
 
 ### Backend (`.env`)
 

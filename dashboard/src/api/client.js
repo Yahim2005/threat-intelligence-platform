@@ -91,7 +91,6 @@ export const api = {
     return get(`/indicators?${q.toString()}`)
   },
   submitIndicator: (payload) => send('POST', '/indicators', payload),
-  register: (payload) => send('POST', '/auth/register', payload),
   login:    (payload) => send('POST', '/auth/login', payload),
   me:       ()        => get('/auth/me'),
 }

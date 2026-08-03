@@ -10,7 +10,7 @@ client = TestClient(app)
 # ─── Fixture : reset rate limiter + métriques entre chaque test ───────────────
 
 @pytest.fixture(autouse=True)
-def reset_state():
+def reset_state(admin_headers):
     """
     Réinitialise le rate limiter et les métriques avant chaque test.
     Sans ça, les compteurs du limiter persistent et cassent les tests suivants.
@@ -21,7 +21,9 @@ def reset_state():
     _metrics["requests_5xx"] = 0
     _metrics["requests_by_path"].clear()
     _metrics["latency_total_ms"] = 0.0
+    client.headers.update(admin_headers)
     yield
+    client.headers.pop("Authorization", None)
 
 
 # ─── /health ─────────────────────────────────────────────────────────────────

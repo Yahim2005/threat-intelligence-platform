@@ -18,6 +18,7 @@ import logging
 from datetime import datetime
 from app.models import Indicator, Sighting, Source, Tag, source
 from app.models.enums import IOCType, IndicatorStatus, TLPLevel
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -147,13 +148,44 @@ def store_records(records: list[dict], source_name: str, session) -> dict:
     if not records:
         return stats
 
+    # Rejeter les enregistrements structurellement invalides AVANT de créer
+    # le SAVEPOINT du lot. Sans cette validation, un seul value=None faisait
+    # rollbacker les centaines d'enregistrements valides du même chunk.
+    valid_records = []
+    for record in records:
+        if not isinstance(record, dict) or not record.get("value") or not record.get("type"):
+            stats["errors"] += 1
+            continue
+        valid_records.append(record)
+    records = valid_records
+    if not records:
+        return stats
+
     CHUNK_SIZE = 500
-    indicator_cache = _bulk_prefetch_indicators(session, records)
+    indicator_cache = {}
     tag_cache = {}
 
     for chunk_start in range(0, len(records), CHUNK_SIZE):
         chunk = records[chunk_start:chunk_start + CHUNK_SIZE]
         try:
+            # Verrou logique PostgreSQL par (type, value), pris dans un ordre
+            # stable. Deux collecteurs concurrents visant le même IOC ne
+            # peuvent ainsi effectuer leur prefetch puis leur INSERT en même
+            # temps. Le verrou est transactionnel et libéré au commit.
+            lock_keys = sorted({
+                f"{getattr(record['type'], 'value', record['type'])}:{record['value'][:2048]}"
+                for record in chunk
+            })
+            session.execute(
+                text(
+                    "SELECT pg_advisory_xact_lock(hashtext(lock_key)) "
+                    "FROM unnest(CAST(:lock_keys AS text[])) AS locks(lock_key) "
+                    "ORDER BY lock_key"
+                ),
+                {"lock_keys": lock_keys},
+            )
+            indicator_cache.update(_bulk_prefetch_indicators(session, chunk))
+
             with session.begin_nested():
                 # Passe 1 : creer en memoire tous les NOUVEAUX indicateurs du
                 # lot, sans flush individuel.

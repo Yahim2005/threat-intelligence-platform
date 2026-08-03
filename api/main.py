@@ -10,7 +10,7 @@ from uuid import uuid4
 from app.models.user import User
 from app.models.enums import UserRole
 from app.security import hash_password, verify_password, create_access_token
-from api.auth import get_current_user, require_admin
+from api.auth import get_current_user, require_admin, visible_tlp_levels_for
 import time
 from pathlib import Path
 from collections import defaultdict
@@ -240,7 +240,7 @@ def health_check(
 
 
 @app.get("/metrics", tags=["Observability"])
-def get_metrics():
+def get_metrics(_user: User = Depends(get_current_user)):
     """
     Retourne les compteurs internes de l'API.
     Remis à zéro au redémarrage — pas de persistance.
@@ -269,6 +269,11 @@ def submit_indicator(
     Soumet manuellement un IOC dans la plateforme.
     La valeur est normalisée et le type auto-détecté si non fourni.
     """
+    if body.tlp.upper() == "RED":
+        raise HTTPException(
+            status_code=422,
+            detail="TLP RED est reserve aux traitements internes et ne peut pas etre soumis via l'API.",
+        )
     try:
         result = queries.create_indicator_manual(db, body.model_dump())
         ind = queries.get_indicator_by_value(db, result["value"])
@@ -291,9 +296,12 @@ def register(
     request: Request,
     body: schemas.UserRegister,
     db: Session = Depends(get_db),
+    _admin: User = Depends(require_admin),
 ):
     """
     Crée un nouveau compte utilisateur (rôle 'user' par défaut).
+    L'inscription publique est fermee : seul un administrateur peut appeler
+    cette route. Le premier administrateur est cree par scripts/create_admin.py.
     """
     existing = db.query(User).filter(User.email == body.email).first()
     if existing:
@@ -377,7 +385,9 @@ def list_indicators(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    allowed_tlps = visible_tlp_levels_for(current_user)
     items, total = queries.get_indicators(
         session=db,
         ioc_type=type,
@@ -392,6 +402,7 @@ def list_indicators(
         cameroon_relevance_min=cameroon_relevance_min,
         page=page,
         page_size=page_size,
+        allowed_tlps=allowed_tlps,
     )
     return schemas.IndicatorListResponse(
         total=total,
@@ -404,13 +415,20 @@ def list_indicators(
 
 @app.get("/indicators/{value:path}/related", response_model=list[schemas.RelatedIndicatorResponse], tags=["Analytics"])
 @limiter.limit("60/minute")
-def get_related(value: str, request: Request, db: Session = Depends(get_db)):
+def get_related(
+    value: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Retourne les IOCs liés à `value` via le graphe de corrélation.
     Utile pour comprendre le contexte d'un indicateur : 
     ex. une IP peut être liée à des domaines qu'elle résout, ou à des IOCs du même batch.
     """
-    results = queries.get_related_indicators(db, value)
+    results = queries.get_related_indicators(
+        db, value, allowed_tlps=visible_tlp_levels_for(current_user)
+    )
     return [schemas.RelatedIndicatorResponse(**r) for r in results]
 
 
@@ -421,20 +439,33 @@ def get_timeline(
     request: Request,
     days: int = Query(30, ge=1, le=90, description="Nombre de jours d'historique"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Retourne l'historique de sightings par jour pour un indicateur.
     Permet de voir si une menace est récente ou persistante dans le temps.
     """
-    results = queries.get_indicator_timeline(db, value, days=days)
+    results = queries.get_indicator_timeline(
+        db,
+        value,
+        days=days,
+        allowed_tlps=visible_tlp_levels_for(current_user),
+    )
     return [schemas.TimelinePointResponse(**r) for r in results]
 
 
 @app.get("/indicators/{value:path}", response_model=schemas.IndicatorResponse, tags=["Indicators"])
 @limiter.limit("60/minute")
-def get_indicator(value: str, request: Request, db: Session = Depends(get_db)):
+def get_indicator(
+    value: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Récupère un indicateur par sa valeur exacte."""
-    ind = queries.get_indicator_by_value(db, value)
+    ind = queries.get_indicator_by_value(
+        db, value, allowed_tlps=visible_tlp_levels_for(current_user)
+    )
     if not ind:
         raise HTTPException(status_code=404, detail=f"Indicateur '{value}' introuvable.")
     return _serialize_indicator(ind)
@@ -445,8 +476,12 @@ def get_indicator(value: str, request: Request, db: Session = Depends(get_db)):
 
 @app.get("/sources", response_model=list[schemas.SourceResponse], tags=["Sources"])
 @limiter.limit("60/minute")
-def list_sources(request: Request, db: Session = Depends(get_db)):
-    rows = queries.get_sources(db)
+def list_sources(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = queries.get_sources(db, allowed_tlps=visible_tlp_levels_for(current_user))
     return [
         schemas.SourceResponse(
             id=str(source.id),
@@ -461,9 +496,16 @@ def list_sources(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/threats/{threat_id}", response_model=schemas.ThreatDetailResponse, tags=["Threats"])
 @limiter.limit("60/minute")
-def get_threat(threat_id: str, request: Request, db: Session = Depends(get_db)):
+def get_threat(
+    threat_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Retourne le détail complet d'un cluster de menaces."""
-    result = queries.get_threat_by_id(db, threat_id)
+    result = queries.get_threat_by_id(
+        db, threat_id, allowed_tlps=visible_tlp_levels_for(current_user)
+    )
     if not result:
         raise HTTPException(status_code=404, detail=f"Threat '{threat_id}' introuvable.")
     return schemas.ThreatDetailResponse(**result)
@@ -478,8 +520,14 @@ def list_threats(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    results, total = queries.get_threats(db, page=page, page_size=page_size)
+    results, total = queries.get_threats(
+        db,
+        page=page,
+        page_size=page_size,
+        allowed_tlps=visible_tlp_levels_for(current_user),
+    )
     return [schemas.ThreatResponse(**r) for r in results]
 
 # ─── Routes : Alerts ──────────────────────────────────────────────────────────
@@ -493,12 +541,20 @@ def get_alerts(
     limit: int = Query(20, ge=1, le=100),
     cameroon_only: bool = Query(False, description="Ne garder que les IOCs pertinents pour le Cameroun"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Retourne les IOCs actifs haute confiance vus récemment.
     Utilisé par le panneau d'alertes du dashboard.
     """
-    results = queries.get_alerts(db, threshold=threshold, hours=hours, limit=limit, cameroon_only=cameroon_only)
+    results = queries.get_alerts(
+        db,
+        threshold=threshold,
+        hours=hours,
+        limit=limit,
+        cameroon_only=cameroon_only,
+        allowed_tlps=visible_tlp_levels_for(current_user),
+    )
     return [schemas.AlertResponse(**r) for r in results]
 
 # ─── Routes : Analytics avancée ───────────────────────────────────────────────
@@ -509,9 +565,12 @@ def get_top_sources(
     request: Request,
     limit: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Top sources par volume d'IOCs."""
-    return queries.get_top_sources(db, limit=limit)
+    return queries.get_top_sources(
+        db, limit=limit, allowed_tlps=visible_tlp_levels_for(current_user)
+    )
 
 
 @app.get("/analytics/top-tags", response_model=list[schemas.NameCountResponse], tags=["Analytics"])
@@ -520,9 +579,12 @@ def get_top_tags(
     request: Request,
     limit: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Top tags malware par nombre d'IOCs."""
-    return queries.get_top_tags(db, limit=limit)
+    return queries.get_top_tags(
+        db, limit=limit, allowed_tlps=visible_tlp_levels_for(current_user)
+    )
 
 
 @app.get("/analytics/confidence-distribution", response_model=list[schemas.RangeCountResponse], tags=["Analytics"])
@@ -530,9 +592,12 @@ def get_top_tags(
 def get_confidence_distribution(
     request: Request,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Distribution des scores de confiance par tranches de 10."""
-    return queries.get_confidence_distribution(db)
+    return queries.get_confidence_distribution(
+        db, allowed_tlps=visible_tlp_levels_for(current_user)
+    )
 
 @app.get("/collection-runs", response_model=list[schemas.CollectionRunResponse], tags=["Observability"])
 @limiter.limit("60/minute")
@@ -540,9 +605,12 @@ def get_collection_runs(
     request: Request,
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Retourne l'historique des runs de collecte."""
-    return queries.get_collection_runs(db, limit=limit)
+    return queries.get_collection_runs(
+        db, limit=limit, allowed_tlps=visible_tlp_levels_for(current_user)
+    )
 
 # ─── Routes : Stats ───────────────────────────────────────────────────────────
 
@@ -552,29 +620,48 @@ def get_trends(
     request: Request,
     days: int = Query(30, ge=1, le=90, description="Nombre de jours"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Retourne le volume d'IOCs ingérés par jour sur les N derniers jours.
     Alimente le graphe de tendance du dashboard.
     """
-    results = queries.get_ingestion_trends(db, days=days)
+    results = queries.get_ingestion_trends(
+        db,
+        days=days,
+        allowed_tlps=visible_tlp_levels_for(current_user),
+    )
     return [schemas.TrendPointResponse(**r) for r in results]
 
 
 @app.get("/stats", response_model=schemas.StatsResponse, tags=["Stats"])
 @limiter.limit("60/minute")
-def get_stats(request: Request, db: Session = Depends(get_db)):
-    return schemas.StatsResponse(**queries.get_stats(db))
+def get_stats(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return schemas.StatsResponse(
+        **queries.get_stats(db, allowed_tlps=visible_tlp_levels_for(current_user))
+    )
 
 # ─── Routes : Cameroun ─────────────────────────────────────────────────────────
 @app.get("/cameroon/overview", response_model=schemas.CameroonOverviewResponse, tags=["Cameroon"])
 @limiter.limit("60/minute")
-def get_cameroon_overview(request: Request, db: Session = Depends(get_db)):
+def get_cameroon_overview(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """
     Vue d'ensemble de la surveillance Cameroun : institutions suivies,
     typosquatting détecté, certificats suspects, surface d'attaque exposée.
     """
-    return schemas.CameroonOverviewResponse(**queries.get_cameroon_overview(db))
+    return schemas.CameroonOverviewResponse(
+        **queries.get_cameroon_overview(
+            db, allowed_tlps=visible_tlp_levels_for(current_user)
+        )
+    )
 
 
 @app.get("/exposed-assets", response_model=schemas.ExposedAssetListResponse, tags=["Cameroon"])
@@ -586,6 +673,7 @@ def list_exposed_assets(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ):
     """
     Retourne les IPs camerounaises avec des services exposés,
@@ -606,6 +694,7 @@ def list_monitored_assets(
     request: Request,
     category: Optional[str] = Query(None, description="ministry, bank, telecom, public_company, institution"),
     db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ):
     """Retourne la liste des institutions camerounaises surveillées."""
     return [schemas.MonitoredAssetResponse(**a) for a in queries.get_monitored_assets(db, category=category)]
@@ -639,25 +728,44 @@ def get_cameroon_timeline_route(
     request: Request,
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Nouvelles détections Cameroun par jour — typosquatting, CT, surface d'attaque."""
-    results = queries.get_cameroon_timeline(db, days=days)
+    results = queries.get_cameroon_timeline(
+        db,
+        days=days,
+        allowed_tlps=visible_tlp_levels_for(current_user),
+    )
     return [schemas.CameroonTimelinePointResponse(**r) for r in results]
 
 
 @app.get("/cameroon/institutions/ranked", response_model=list[schemas.InstitutionRiskResponse], tags=["Cameroon"])
 @limiter.limit("60/minute")
-def get_institutions_ranked_route(request: Request, db: Session = Depends(get_db)):
+def get_institutions_ranked_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Classe les institutions camerounaises par score de risque composite."""
-    results = queries.get_institutions_ranked(db)
+    results = queries.get_institutions_ranked(
+        db, allowed_tlps=visible_tlp_levels_for(current_user)
+    )
     return [schemas.InstitutionRiskResponse(**r) for r in results]
 
 
 @app.get("/cameroon/vuln-severity", response_model=schemas.VulnSeverityResponse, tags=["Cameroon"])
 @limiter.limit("60/minute")
-def get_vuln_severity_route(request: Request, db: Session = Depends(get_db)):
+def get_vuln_severity_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Répartition de sévérité des CVE trouvées sur la surface d'attaque exposée."""
-    return schemas.VulnSeverityResponse(**queries.get_vuln_severity_breakdown(db))
+    return schemas.VulnSeverityResponse(
+        **queries.get_vuln_severity_breakdown(
+            db, allowed_tlps=visible_tlp_levels_for(current_user)
+        )
+    )
 
 
 @app.post("/monitored-assets", response_model=schemas.MonitoredAssetResponse, tags=["Cameroon"])
@@ -695,7 +803,11 @@ def update_monitored_asset_route(
 
 @app.get("/cameroon/sector-breakdown", response_model=list[schemas.SectorBreakdownResponse], tags=["Cameroon"])
 @limiter.limit("60/minute")
-def get_sector_breakdown_route(request: Request, db: Session = Depends(get_db)):
+def get_sector_breakdown_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
     """Agrège le risque par secteur d'institution."""
     return [schemas.SectorBreakdownResponse(**r) for r in queries.get_sector_breakdown(db)]
 
@@ -706,6 +818,7 @@ def get_top_ports_route(
     request: Request,
     limit: int = Query(10, ge=1, le=50),
     db: Session = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ):
     """Ports les plus fréquemment exposés sur la surface d'attaque."""
     return [schemas.PortCountResponse(**r) for r in queries.get_top_exposed_ports(db, limit=limit)]

@@ -12,9 +12,13 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import Indicator
 from app.models.api_client import ApiClient
-from app.models.enums import IndicatorStatus
+from app.models.enums import IndicatorStatus, TLPLevel
 from app.models.user import User
-from api.auth import get_current_user_or_api_key
+from api.auth import (
+    USER_VISIBLE_TLPS,
+    get_current_user_or_api_key,
+    visible_tlp_levels_for,
+)
 from api.rate_limit import client_limiter
 from core.stix import to_stix
 import stix2
@@ -44,6 +48,7 @@ def _exportable_base_query(
     session: Session,
     ioc_type: Optional[str],
     confidence_min: int,
+    allowed_tlps: tuple[TLPLevel, ...] = USER_VISIBLE_TLPS,
 ):
     """
     Query (non exécutée) des indicateurs exportables, sans tri :
@@ -57,6 +62,7 @@ def _exportable_base_query(
         session.query(Indicator)
         .filter(Indicator.status == IndicatorStatus.active)
         .filter(Indicator.confidence >= confidence_min)
+        .filter(Indicator.tlp.in_(allowed_tlps))
     )
     if ioc_type:
         q = q.filter(Indicator.type == ioc_type)
@@ -73,6 +79,7 @@ def _fetch_exportable(
     session: Session,
     ioc_type: Optional[str],
     confidence_min: int,
+    allowed_tlps: tuple[TLPLevel, ...] = USER_VISIBLE_TLPS,
 ) -> list[Indicator]:
     """Version triée-et-exécutée de _exportable_base_query, utilisée par les
     exports ponctuels (/export/*) qui veulent les indicateurs les plus fiables
@@ -81,7 +88,7 @@ def _fetch_exportable(
     # (cas courant, la plupart des collecteurs assignent 50 par defaut)
     # peuvent ressortir regroupees par bloc d'insertion plutot que melangees.
     return (
-        _exportable_base_query(session, ioc_type, confidence_min)
+        _exportable_base_query(session, ioc_type, confidence_min, allowed_tlps)
         .order_by(Indicator.confidence.desc(), Indicator.created_at.desc())
         .all()
     )
@@ -96,7 +103,7 @@ def export_stix(
     type: Optional[str] = Query(None, description="Filtrer par type d'IOC"),
     confidence_min: int = Query(50, ge=0, le=100, description="Confidence minimum"),
     db: Session = Depends(get_db),
-    _auth: User | ApiClient | None = Depends(get_current_user_or_api_key),
+    auth: User | ApiClient | None = Depends(get_current_user_or_api_key),
 ):
     """
     Retourne un bundle STIX 2.1 contenant les indicateurs actifs
@@ -104,7 +111,10 @@ def export_stix(
     Protégé par clé API (header X-API-Key, partenaires) ou session
     dashboard (token Bearer, utilisateurs connectés).
     """
-    indicators = _fetch_exportable(db, ioc_type=type, confidence_min=confidence_min)
+    allowed_tlps = visible_tlp_levels_for(auth) if isinstance(auth, User) else USER_VISIBLE_TLPS
+    indicators = _fetch_exportable(
+        db, ioc_type=type, confidence_min=confidence_min, allowed_tlps=allowed_tlps
+    )
 
     stix_objects = []
     for ind in indicators:
@@ -134,14 +144,17 @@ def export_csv(
     type: Optional[str] = Query(None, description="Filtrer par type d'IOC"),
     confidence_min: int = Query(50, ge=0, le=100, description="Confidence minimum"),
     db: Session = Depends(get_db),
-    _auth: User | ApiClient | None = Depends(get_current_user_or_api_key),
+    auth: User | ApiClient | None = Depends(get_current_user_or_api_key),
 ):
     """
     Retourne un fichier CSV téléchargeable avec les indicateurs actifs.
     Protégé par clé API (header X-API-Key, partenaires) ou session
     dashboard (token Bearer, utilisateurs connectés).
     """
-    indicators = _fetch_exportable(db, ioc_type=type, confidence_min=confidence_min)
+    allowed_tlps = visible_tlp_levels_for(auth) if isinstance(auth, User) else USER_VISIBLE_TLPS
+    indicators = _fetch_exportable(
+        db, ioc_type=type, confidence_min=confidence_min, allowed_tlps=allowed_tlps
+    )
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -180,7 +193,7 @@ def export_blocklist(
     type: Optional[str] = Query(None, description="Filtrer par type : ip, domain, url"),
     confidence_min: int = Query(70, ge=0, le=100, description="Confidence minimum (défaut 70)"),
     db: Session = Depends(get_db),
-    _auth: User | ApiClient | None = Depends(get_current_user_or_api_key),
+    auth: User | ApiClient | None = Depends(get_current_user_or_api_key),
 ):
     """
     Retourne une liste brute de valeurs (une par ligne) pour import
@@ -189,7 +202,10 @@ def export_blocklist(
     Protégé par clé API (header X-API-Key, partenaires) ou session
     dashboard (token Bearer, utilisateurs connectés).
     """
-    indicators = _fetch_exportable(db, ioc_type=type, confidence_min=confidence_min)
+    allowed_tlps = visible_tlp_levels_for(auth) if isinstance(auth, User) else USER_VISIBLE_TLPS
+    indicators = _fetch_exportable(
+        db, ioc_type=type, confidence_min=confidence_min, allowed_tlps=allowed_tlps
+    )
 
     lines = [ind.value for ind in indicators]
     content = "\n".join(lines) + "\n" if lines else "\n"

@@ -116,7 +116,10 @@ def test_store_records_full_pipeline(db_session, test_source):
     ).all()
     assert len(indicators) == 2
 
-    sightings = db_session.query(Sighting).all()
+    indicator_ids = [indicator.id for indicator in indicators]
+    sightings = db_session.query(Sighting).filter(
+        Sighting.indicator_id.in_(indicator_ids)
+    ).all()
     assert len(sightings) == 2
 
 

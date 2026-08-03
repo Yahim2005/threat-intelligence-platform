@@ -35,13 +35,6 @@ export function AuthProvider({ children }) {
     return data.user
   }
 
-  async function register(email, password, fullName) {
-    const data = await api.register({ email, password, full_name: fullName || undefined })
-    setAuthToken(data.access_token)
-    setUser(data.user)
-    return data.user
-  }
-
   function logout() {
     setAuthToken(null)
     setUser(null)
@@ -53,7 +46,6 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user,
     isAdmin: user?.role === 'admin',
     login,
-    register,
     logout,
   }
 

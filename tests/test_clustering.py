@@ -1,241 +1,161 @@
-"""
-Tests du moteur de clustering.
-Scénario principal : un ensemble d'IOCs liés à 'emotet' forme une Threat nommée.
-"""
+"""Tests du clustering actuel par institution camerounaise ciblee."""
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from collections import Counter
+from unittest.mock import MagicMock
+from uuid import uuid4
 
-import pytest
-
-from app.models.enums import IOCType, IndicatorStatus, ThreatType, TLPLevel
+from app.models.enums import AssetCategory, ThreatType, TLPLevel
 from app.models.indicator import Indicator
+from app.models.monitored_asset import MonitoredAsset
 from app.models.tag import Tag
 from app.models.threat import Threat
 from core.clustering import (
-    _dominant_malware_tag,
-    _dominant_source,
-    _name_cluster,
+    _build_description,
+    _build_name,
+    _resolve_institution,
+    _slugify,
     _upsert_threat,
     get_threats_for_indicator,
+    mechanism_counts_for_indicators,
 )
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def make_indicator(ioc_type: str = "ip", value: str = "1.2.3.4", source_name: str | None = None) -> Indicator:
-    ind = Indicator()
-    ind.id = uuid.uuid4()
-    ind.value = value
-    ind.type = IOCType(ioc_type)
-    ind.tlp = TLPLevel.CLEAR
-    ind.confidence = 50
-    ind.status = IndicatorStatus.active
-    ind.tags = []
-    ind.threats = []
-    ind.raw_metadata = {}
-    ind.last_seen = datetime.now(timezone.utc)
-    if source_name:
-        from app.models.source import Source
-        s = Source()
-        s.id = uuid.uuid4()
-        s.name = source_name
-        ind.source = s
-    else:
-        ind.source = None
-    return ind
+def make_asset(name: str = "Ministere des Finances", acronym: str = "MINFI") -> MonitoredAsset:
+    asset = MonitoredAsset()
+    asset.id = uuid4()
+    asset.name = name
+    asset.acronym = acronym
+    asset.category = AssetCategory.ministry
+    return asset
 
 
-def make_tag(name: str) -> Tag:
-    t = Tag()
-    t.id = uuid.uuid4()
-    t.name = name
-    return t
+def make_indicator(*tag_names: str) -> Indicator:
+    indicator = Indicator()
+    indicator.id = uuid4()
+    indicator.value = f"ioc-{uuid4().hex}.example"
+    indicator.tags = [Tag(id=uuid4(), name=name) for name in tag_names]
+    indicator.threats = []
+    return indicator
 
 
-def make_threat(name: str, threat_type: ThreatType = ThreatType.campaign) -> Threat:
-    t = Threat()
-    t.id = uuid.uuid4()
-    t.name = name
-    t.threat_type = threat_type
-    t.tlp = TLPLevel.CLEAR
-    t.indicators = []
-    return t
+def test_slugify_prefers_acronym():
+    assert _slugify(make_asset()) == "minfi"
 
 
-# ---------------------------------------------------------------------------
-# Tests _dominant_malware_tag
-# ---------------------------------------------------------------------------
+def test_resolve_institution_collects_mechanisms():
+    asset = make_asset()
+    indicator = make_indicator("typosquat:minfi", "ct:minfi", "malware:test")
 
-class TestDominantMalwareTag:
+    resolved = _resolve_institution(indicator, {"minfi": asset})
 
-    def test_emotet_tag_detected(self):
-        """Le tag malware:emotet doit être détecté comme dominant."""
-        ind1 = make_indicator()
-        ind1.tags = [make_tag("malware:emotet"), make_tag("kind:trojan")]
-        ind2 = make_indicator(value="2.2.2.2")
-        ind2.tags = [make_tag("malware:emotet")]
-        ind3 = make_indicator(value="3.3.3.3")
-        ind3.tags = [make_tag("malware:trickbot")]
-
-        result = _dominant_malware_tag([ind1, ind2, ind3])
-        assert result == "emotet"
-
-    def test_no_malware_tags_returns_none(self):
-        """Sans tag malware:*, retourne None."""
-        ind1 = make_indicator()
-        ind1.tags = [make_tag("kind:phishing")]
-        result = _dominant_malware_tag([ind1])
-        assert result is None
-
-    def test_empty_indicators(self):
-        assert _dominant_malware_tag([]) is None
+    assert resolved is not None
+    resolved_asset, mechanisms = resolved
+    assert resolved_asset is asset
+    assert mechanisms == {"typosquat", "ct"}
 
 
-# ---------------------------------------------------------------------------
-# Tests _dominant_source
-# ---------------------------------------------------------------------------
-
-class TestDominantSource:
-
-    def test_openphish_is_dominant(self):
-        ind1 = make_indicator(source_name="OpenPhish")
-        ind2 = make_indicator(source_name="OpenPhish")
-        ind3 = make_indicator(source_name="URLhaus")
-        result = _dominant_source([ind1, ind2, ind3])
-        assert result == "OpenPhish"
-
-    def test_no_source_returns_none(self):
-        ind1 = make_indicator()  # source=None
-        result = _dominant_source([ind1])
-        assert result is None
+def test_resolve_institution_ignores_unknown_tags():
+    asset = make_asset()
+    indicator = make_indicator("malware:emotet", "typosquat:unknown")
+    assert _resolve_institution(indicator, {"minfi": asset}) is None
 
 
-# ---------------------------------------------------------------------------
-# Tests _name_cluster
-# ---------------------------------------------------------------------------
-
-class TestNameCluster:
-
-    def test_emotet_cluster_named_malware(self):
-        """Un cluster avec tag emotet dominant → nom 'Malware: Emotet'."""
-        ind1 = make_indicator()
-        ind1.tags = [make_tag("malware:emotet")]
-        ind2 = make_indicator(value="2.2.2.2")
-        ind2.tags = [make_tag("malware:emotet")]
-
-        name, threat_type, description = _name_cluster([ind1, ind2], 1)
-        assert name == "Malware: Emotet"
-        assert threat_type == ThreatType.malware
-        assert "emotet" in description.lower()
-
-    def test_source_cluster_named_campaign(self):
-        """Sans tag malware, le nom est basé sur la source dominante."""
-        ind1 = make_indicator(source_name="OpenPhish")
-        ind2 = make_indicator(source_name="OpenPhish")
-
-        name, threat_type, description = _name_cluster([ind1, ind2], 5)
-        assert "OpenPhish" in name
-        assert threat_type == ThreatType.campaign
-
-    def test_unknown_cluster_generic_name(self):
-        """Sans tag ni source → nom générique."""
-        ind1 = make_indicator()
-        name, threat_type, description = _name_cluster([ind1], 3)
-        assert "Unknown" in name or "Cluster" in name
+def test_mechanism_counts_counts_each_mechanism_once_per_indicator():
+    indicators = [
+        make_indicator("typosquat:minfi", "ct:minfi"),
+        make_indicator("typosquat:minfi", "typosquat:other"),
+    ]
+    assert mechanism_counts_for_indicators(indicators) == Counter(
+        {"typosquat": 2, "ct": 1}
+    )
 
 
-# ---------------------------------------------------------------------------
-# Tests _upsert_threat
-# ---------------------------------------------------------------------------
-
-class TestUpsertThreat:
-
-    def _make_session(self, existing_threat=None):
-        session = MagicMock()
-        q = MagicMock()
-        q.filter_by.return_value.first.return_value = existing_threat
-        session.query.return_value = q
-        return session
-
-    def test_creates_new_threat(self):
-        """Si la Threat n'existe pas, elle est créée."""
-        session = self._make_session(existing_threat=None)
-        ind = make_indicator()
-        threat = _upsert_threat(
-            session, "Malware: Emotet", ThreatType.malware,
-            "Description test", [ind]
-        )
-        session.add.assert_called_once()
-        assert threat.name == "Malware: Emotet"
-        assert threat.threat_type == ThreatType.malware
-
-    def test_updates_existing_threat(self):
-        """Si la Threat existe déjà, elle est mise à jour."""
-        existing = make_threat("Malware: Emotet", ThreatType.malware)
-        session = self._make_session(existing_threat=existing)
-        ind = make_indicator()
-        threat = _upsert_threat(
-            session, "Malware: Emotet", ThreatType.malware,
-            "Nouvelle description", [ind]
-        )
-        # Pas de session.add — on met à jour l'existant
-        session.add.assert_not_called()
-        assert threat.description == "Nouvelle description"
-
-    def test_indicators_added_to_threat(self):
-        """Les indicateurs sont ajoutés à la Threat."""
-        session = self._make_session(existing_threat=None)
-        ind1 = make_indicator()
-        ind2 = make_indicator(value="2.2.2.2")
-        threat = _upsert_threat(
-            session, "Test Threat", ThreatType.campaign,
-            "desc", [ind1, ind2]
-        )
-        assert len(threat.indicators) == 2
-
-    def test_no_duplicate_indicators(self):
-        """Les indicateurs déjà présents ne sont pas dupliqués."""
-        existing = make_threat("Malware: Emotet")
-        ind = make_indicator()
-        existing.indicators = [ind]  # déjà présent
-
-        session = self._make_session(existing_threat=existing)
-        threat = _upsert_threat(
-            session, "Malware: Emotet", ThreatType.malware,
-            "desc", [ind]  # même indicateur
-        )
-        assert len(threat.indicators) == 1  # pas de doublon
+def test_build_name_is_deterministic():
+    asset = make_asset()
+    assert _build_name(asset, {"ct", "typosquat"}, True) == (
+        "Ministere des Finances — typosquatting + certificats suspects + surface d'attaque"
+    )
 
 
-# ---------------------------------------------------------------------------
-# Tests get_threats_for_indicator
-# ---------------------------------------------------------------------------
+def test_build_description_contains_counts():
+    description = _build_description(
+        make_asset(), {"typosquat": 2, "ct": 1}, indicator_count=3, exposed_count=4
+    )
+    assert "3 indicateur(s)" in description
+    assert "2 domaine(s) de typosquatting" in description
+    assert "4 IP(s) exposée(s)" in description
 
-class TestGetThreatsForIndicator:
 
-    def test_returns_threats_for_indicator(self):
-        """Retourne les Threats associées à un indicateur."""
-        ind = make_indicator()
-        threat = make_threat("Malware: Emotet", ThreatType.malware)
-        threat.indicators = [ind]
-        ind.threats = [threat]
+def _session_with_existing(existing: Threat | None = None) -> MagicMock:
+    session = MagicMock()
+    query = MagicMock()
+    query.filter_by.return_value.first.return_value = existing
+    session.query.return_value = query
+    return session
 
-        session = MagicMock()
-        session.query.return_value.filter_by.return_value.first.return_value = ind
 
-        results = get_threats_for_indicator(session, str(ind.id))
-        assert len(results) == 1
-        assert results[0]["name"] == "Malware: Emotet"
+def test_upsert_creates_campaign_for_institution():
+    session = _session_with_existing()
+    asset = make_asset()
+    indicators = [make_indicator("typosquat:minfi")]
 
-    def test_unknown_indicator_returns_empty(self):
-        """Un indicateur inexistant retourne une liste vide."""
-        session = MagicMock()
-        session.query.return_value.filter_by.return_value.first.return_value = None
+    threat = _upsert_threat(
+        session, asset, Counter({"typosquat": 1}), indicators, []
+    )
 
-        results = get_threats_for_indicator(session, str(uuid.uuid4()))
-        assert results == []
+    session.add.assert_called_once_with(threat)
+    assert threat.target_institution_id == asset.id
+    assert threat.threat_type == ThreatType.campaign
+    assert threat.tlp == TLPLevel.CLEAR
+    assert threat.indicators == indicators
+
+
+def test_upsert_replaces_existing_cluster_content():
+    asset = make_asset()
+    existing = Threat()
+    existing.id = uuid4()
+    existing.target_institution_id = asset.id
+    existing.threat_type = ThreatType.campaign
+    existing.tlp = TLPLevel.CLEAR
+    existing.indicators = [make_indicator("ct:minfi")]
+    session = _session_with_existing(existing)
+    replacement = [make_indicator("nrd_watch:minfi")]
+
+    threat = _upsert_threat(
+        session, asset, Counter({"nrd_watch": 1}), replacement, ["192.0.2.1"]
+    )
+
+    session.add.assert_not_called()
+    assert threat is existing
+    assert threat.indicators == replacement
+    assert "surface d'attaque" in threat.name
+
+
+def test_get_threats_for_unknown_indicator_returns_empty():
+    session = MagicMock()
+    session.query.return_value.filter_by.return_value.first.return_value = None
+    assert get_threats_for_indicator(session, str(uuid4())) == []
+
+
+def test_get_threats_for_indicator_serializes_associations():
+    indicator = make_indicator("typosquat:minfi")
+    threat = Threat()
+    threat.id = uuid4()
+    threat.name = "Campagne MINFI"
+    threat.threat_type = ThreatType.campaign
+    threat.description = "Description"
+    threat.indicators = [indicator]
+    indicator.threats = [threat]
+    session = MagicMock()
+    session.query.return_value.filter_by.return_value.first.return_value = indicator
+
+    result = get_threats_for_indicator(session, str(indicator.id))
+
+    assert result == [{
+        "threat_id": str(threat.id),
+        "name": "Campagne MINFI",
+        "threat_type": "campaign",
+        "description": "Description",
+        "indicator_count": 1,
+    }]

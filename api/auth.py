@@ -12,12 +12,30 @@ from app.api_clients import hash_api_key as _hash_key
 from app.database import SessionLocal
 from app.models.api_client import ApiClient
 from app.models.user import User
-from app.models.enums import UserRole
+from app.models.enums import TLPLevel, UserRole
 from app.security import decode_access_token
 
 # FastAPI lit automatiquement le header X-API-Key dans chaque requête
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+# Politique de diffusion TLP de l'API. RED n'apparait volontairement dans
+# aucune liste : ce niveau reste reserve aux traitements internes en base.
+USER_VISIBLE_TLPS = (TLPLevel.CLEAR, TLPLevel.GREEN)
+ADMIN_VISIBLE_TLPS = (
+    TLPLevel.CLEAR,
+    TLPLevel.GREEN,
+    TLPLevel.AMBER,
+    TLPLevel.AMBER_STRICT,
+)
+
+
+def visible_tlp_levels_for(user: User) -> tuple[TLPLevel, ...]:
+    """Retourne les niveaux TLP consultables par un utilisateur authentifie."""
+    if user.role == UserRole.admin:
+        return ADMIN_VISIBLE_TLPS
+    return USER_VISIBLE_TLPS
 
 
 def get_db():

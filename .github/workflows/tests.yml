@@ -1,0 +1,54 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tip
+          POSTGRES_PASSWORD: tip_secret
+          POSTGRES_DB: tip_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tip -d tip_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # tests/conftest.py refuse toute URL distante et toute base dont le nom
+      # ne commence pas par tip_test.
+      TEST_DATABASE_URL: postgresql+psycopg2://tip:tip_secret@127.0.0.1:5432/tip_test
+      DATABASE_URL: postgresql+psycopg2://should:never-be-used@production.invalid/prod
+      JWT_SECRET_KEY: pytest-only-jwt-secret-never-use-in-production
+      TIP_API_KEY: tip-secret-dev-key-2024
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run complete test suite
+        run: pytest -q

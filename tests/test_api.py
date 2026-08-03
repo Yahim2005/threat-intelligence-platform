@@ -7,6 +7,14 @@ from api.main import app
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def authenticated_user(user_headers):
+    """Les lectures générales exigent désormais une session utilisateur."""
+    client.headers.update(user_headers)
+    yield
+    client.headers.pop("Authorization", None)
+
+
 # ─── Stats ───────────────────────────────────────────────────────────────────
 
 def test_stats_returns_200():

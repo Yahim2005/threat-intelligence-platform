@@ -4,27 +4,17 @@ import { AlertCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login({ onSuccess }) {
-  const { login, register } = useAuth()
-  const [mode, setMode] = useState('login') // 'login' | 'register'
+  const { login } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [form, setForm] = useState({ identifier: '', password: '', fullName: '' })
-
-  function switchMode(next) {
-    setMode(next)
-    setError(null)
-  }
+  const [form, setForm] = useState({ identifier: '', password: '' })
 
   async function submit(e) {
     e.preventDefault()
     setError(null)
     setLoading(true)
     try {
-      if (mode === 'login') {
-        await login(form.identifier.trim(), form.password)
-      } else {
-        await register(form.identifier.trim(), form.password, form.fullName.trim())
-      }
+      await login(form.identifier.trim(), form.password)
       if (onSuccess) onSuccess()
     } catch (err) {
       setError(err.message)
@@ -57,57 +47,21 @@ export default function Login({ onSuccess }) {
               className="text-xl font-semibold text-[#2c1810]"
               style={{ fontFamily: 'Space Grotesk, sans-serif' }}
             >
-              {mode === 'login' ? 'Connexion' : 'Créer un compte'}
+              Connexion
             </h1>
           </div>
         </div>
 
         {/* Carte */}
         <div className="bg-white rounded-2xl shadow-xl border border-[#ede8e3] p-6">
-          {/* Onglets */}
-          <div className="flex rounded-xl bg-[#f4efe9] p-1 mb-5">
-            {[
-              ['login', 'Connexion'],
-              ['register', 'Inscription'],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => switchMode(value)}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  mode === value
-                    ? 'bg-[#8b7355] text-white shadow-sm'
-                    : 'text-[#8b7355] hover:text-[#6b5d4f]'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
           {/* Formulaire */}
           <form onSubmit={submit} className="space-y-4">
-            {mode === 'register' && (
-              <div>
-                <label className="text-xs font-medium text-[#6b5d4f] mb-1.5 block">
-                  Nom complet
-                </label>
-                <input
-                  type="text"
-                  value={form.fullName}
-                  onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))}
-                  placeholder="Optionnel"
-                  className={inputClass}
-                />
-              </div>
-            )}
-
             <div>
               <label className="text-xs font-medium text-[#6b5d4f] mb-1.5 block">
-                {mode === 'login' ? 'Email ou téléphone' : 'Email'}
+                Email ou téléphone
               </label>
               <input
-                type={mode === 'login' ? 'text' : 'email'}
+                type="text"
                 required
                 value={form.identifier}
                 onChange={e => setForm(f => ({ ...f, identifier: e.target.value }))}
@@ -144,20 +98,14 @@ export default function Login({ onSuccess }) {
               disabled={loading}
               className="w-full py-2.5 text-sm font-medium bg-[#8b7355] text-white rounded-lg hover:bg-[#7a6349] focus:outline-none focus:ring-2 focus:ring-[#c4a882]/50 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-60 transition-colors"
             >
-              {loading
-                ? 'Veuillez patienter…'
-                : mode === 'login'
-                ? 'Se connecter'
-                : "S'inscrire"}
+              {loading ? 'Veuillez patienter…' : 'Se connecter'}
             </button>
           </form>
         </div>
 
         {/* Aide contextuelle sous la carte */}
         <p className="text-center text-xs text-gray-400 mt-5">
-          {mode === 'login'
-            ? 'Connexion par email ou numéro de téléphone.'
-            : 'Un compte utilisateur standard sera créé.'}
+          Les comptes sont créés par un administrateur ANTIC/CIRT.
         </p>
       </div>
     </div>

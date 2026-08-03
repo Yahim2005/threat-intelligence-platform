@@ -30,8 +30,12 @@ def get_indicators(
     cameroon_relevance_min: Optional[int] = None,
     page: int = 1,
     page_size: int = 50,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
 ) -> tuple[list[Indicator], int]:
     q = session.query(Indicator)
+
+    if allowed_tlps is not None:
+        q = q.filter(Indicator.tlp.in_(allowed_tlps))
 
     if ioc_type:
         q = q.filter(Indicator.type == ioc_type)
@@ -64,14 +68,21 @@ def get_indicators(
     return items, total
 
 
-def get_indicator_by_value(session: Session, value: str) -> Optional[Indicator]:
+def get_indicator_by_value(
+    session: Session,
+    value: str,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> Optional[Indicator]:
     """
     Recherche par valeur exacte d'abord. Si rien n'est trouvé, tente une
     normalisation (utile pour les numéros de téléphone locaux comme
     '656708967' qui doivent matcher '+237656708967' en base, ou pour des
     IOCs saisis dans un format légèrement différent du format canonique).
     """
-    ind = session.query(Indicator).filter(Indicator.value == value).first()
+    q = session.query(Indicator).filter(Indicator.value == value)
+    if allowed_tlps is not None:
+        q = q.filter(Indicator.tlp.in_(allowed_tlps))
+    ind = q.first()
     if ind:
         return ind
 
@@ -83,15 +94,29 @@ def get_indicator_by_value(session: Session, value: str) -> Optional[Indicator]:
     if norm_value == value:
         return None  # déjà tenté, pas la peine de refaire la même requête
 
-    return session.query(Indicator).filter(Indicator.value == norm_value).first()
+    q = session.query(Indicator).filter(Indicator.value == norm_value)
+    if allowed_tlps is not None:
+        q = q.filter(Indicator.tlp.in_(allowed_tlps))
+    return q.first()
 
 
 # ─── Sources ─────────────────────────────────────────────────────────────────
 
-def get_sources(session: Session) -> list[tuple[Source, int]]:
-    rows = (
+def get_sources(
+    session: Session,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> list[tuple[Source, int]]:
+    join_condition = Indicator.source_id == Source.id
+    if allowed_tlps is not None:
+        join_condition = join_condition & Indicator.tlp.in_(allowed_tlps)
+    q = (
         session.query(Source, func.count(Indicator.id).label("indicator_count"))
-        .outerjoin(Indicator, Indicator.source_id == Source.id)
+        .outerjoin(Indicator, join_condition)
+    )
+    if allowed_tlps is not None:
+        q = q.filter(Source.tlp.in_(allowed_tlps))
+    rows = (
+        q
         .group_by(Source.id)
         .order_by(Source.name)
         .all()
@@ -105,11 +130,14 @@ def get_threats(
     session: Session,
     page: int = 1,
     page_size: int = 50,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
 ) -> tuple[list[dict], int]:
     from core.clustering import mechanism_counts_for_indicators
     from app.models.exposed_asset import ExposedAsset
 
     base = session.query(Threat)
+    if allowed_tlps is not None:
+        base = base.filter(Threat.tlp.in_(allowed_tlps))
     total = base.count()
 
     threats = (
@@ -121,7 +149,10 @@ def get_threats(
 
     results = []
     for threat in threats:
-        indicators = threat.indicators
+        indicators = [
+            indicator for indicator in threat.indicators
+            if allowed_tlps is None or indicator.tlp in allowed_tlps
+        ]
         avg_confidence = (
             sum(i.confidence for i in indicators if i.confidence is not None) / len(indicators)
             if indicators else None
@@ -166,33 +197,47 @@ def get_threats(
 
 # ─── Stats ───────────────────────────────────────────────────────────────────
 
-def get_stats(session: Session) -> dict:
-    total = session.query(func.count(Indicator.id)).scalar()
+def get_stats(
+    session: Session,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> dict:
+    def visible(query):
+        if allowed_tlps is not None:
+            return query.filter(Indicator.tlp.in_(allowed_tlps))
+        return query
+
+    total = visible(session.query(func.count(Indicator.id))).scalar()
 
     status_counts = (
-        session.query(Indicator.status, func.count(Indicator.id))
+        visible(session.query(Indicator.status, func.count(Indicator.id)))
         .group_by(Indicator.status)
         .all()
     )
     by_status = {str(s.value if hasattr(s, "value") else s): c for s, c in status_counts}
 
     type_counts = (
-        session.query(Indicator.type, func.count(Indicator.id))
+        visible(session.query(Indicator.type, func.count(Indicator.id)))
         .group_by(Indicator.type)
         .all()
     )
     by_type = {str(t.value if hasattr(t, "value") else t): c for t, c in type_counts}
 
     tlp_counts = (
-        session.query(Indicator.tlp, func.count(Indicator.id))
+        visible(session.query(Indicator.tlp, func.count(Indicator.id)))
         .group_by(Indicator.tlp)
         .all()
     )
     by_tlp = {str(t.value if hasattr(t, "value") else t): c for t, c in tlp_counts if t is not None}
 
-    avg_confidence = session.query(func.avg(Indicator.confidence)).scalar()
-    total_threats = session.query(func.count(Threat.id)).scalar()
-    total_sources = session.query(func.count(Source.id)).scalar()
+    avg_confidence = visible(session.query(func.avg(Indicator.confidence))).scalar()
+    threat_query = session.query(func.count(Threat.id))
+    if allowed_tlps is not None:
+        threat_query = threat_query.filter(Threat.tlp.in_(allowed_tlps))
+    total_threats = threat_query.scalar()
+    source_query = session.query(func.count(Source.id))
+    if allowed_tlps is not None:
+        source_query = source_query.filter(Source.tlp.in_(allowed_tlps))
+    total_sources = source_query.scalar()
 
     return {
         "total_indicators": total,
@@ -212,13 +257,20 @@ from sqlalchemy import cast, Date
 from app.models import TIPRelationship, Sighting
 
 
-def get_related_indicators(session: Session, value: str) -> list[dict]:
+def get_related_indicators(
+    session: Session,
+    value: str,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> list[dict]:
     """
     Trouve tous les IOCs liés à `value` via la table relationships.
     Retourne la liste avec le type de relation et la confiance.
     """
     # D'abord on récupère l'indicateur source
-    ind = session.query(Indicator).filter(Indicator.value == value).first()
+    q = session.query(Indicator).filter(Indicator.value == value)
+    if allowed_tlps is not None:
+        q = q.filter(Indicator.tlp.in_(allowed_tlps))
+    ind = q.first()
     if not ind:
         return []
 
@@ -239,9 +291,10 @@ def get_related_indicators(session: Session, value: str) -> list[dict]:
         # L'autre bout de la relation
         other_id = rel.target_ref if rel.source_ref == ind_id else rel.source_ref
 
-        other = session.query(Indicator).filter(
-            Indicator.id == other_id
-        ).first()
+        other_query = session.query(Indicator).filter(Indicator.id == other_id)
+        if allowed_tlps is not None:
+            other_query = other_query.filter(Indicator.tlp.in_(allowed_tlps))
+        other = other_query.first()
         if not other:
             continue
 
@@ -258,12 +311,20 @@ def get_related_indicators(session: Session, value: str) -> list[dict]:
     return results
 
 
-def get_indicator_timeline(session: Session, value: str, days: int = 30) -> list[dict]:
+def get_indicator_timeline(
+    session: Session,
+    value: str,
+    days: int = 30,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> list[dict]:
     """
     Retourne le nombre de sightings par jour sur les `days` derniers jours
     pour l'indicateur identifié par `value`.
     """
-    ind = session.query(Indicator).filter(Indicator.value == value).first()
+    q = session.query(Indicator).filter(Indicator.value == value)
+    if allowed_tlps is not None:
+        q = q.filter(Indicator.tlp.in_(allowed_tlps))
+    ind = q.first()
     if not ind:
         return []
 
@@ -284,19 +345,25 @@ def get_indicator_timeline(session: Session, value: str, days: int = 30) -> list
     return [{"date": str(row.day), "sightings": int(row.total)} for row in rows]
 
 
-def get_ingestion_trends(session: Session, days: int = 30) -> list[dict]:
+def get_ingestion_trends(
+    session: Session,
+    days: int = 30,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> list[dict]:
     """
     Retourne le nombre d'indicateurs créés par jour sur les `days` derniers jours.
     Utilisé par le dashboard pour afficher la courbe de tendance.
     """
     since = datetime.utcnow() - timedelta(days=days)
 
-    rows = (
-        session.query(
+    q = session.query(
             cast(Indicator.first_seen, Date).label("day"),
             func.count(Indicator.id).label("total"),
-        )
-        .filter(Indicator.first_seen >= since)
+        ).filter(Indicator.first_seen >= since)
+    if allowed_tlps is not None:
+        q = q.filter(Indicator.tlp.in_(allowed_tlps))
+    rows = (
+        q
         .group_by(cast(Indicator.first_seen, Date))
         .order_by(cast(Indicator.first_seen, Date))
         .all()
@@ -310,6 +377,7 @@ def get_alerts(
     hours: int = 24,
     limit: int = 20,
     cameroon_only: bool = False,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
 ) -> list[dict]:
     """
     Retourne les IOCs actifs haute confiance vus récemment.
@@ -330,6 +398,8 @@ def get_alerts(
     )
     if cameroon_only:
         q = q.filter(Indicator.cameroon_relevance > 0)
+    if allowed_tlps is not None:
+        q = q.filter(Indicator.tlp.in_(allowed_tlps))
 
     rows = (
         q.order_by(Indicator.confidence.desc())
@@ -350,7 +420,11 @@ def get_alerts(
         for r in rows
     ]
     
-def get_threat_by_id(session: Session, threat_id: str) -> Optional[dict]:
+def get_threat_by_id(
+    session: Session,
+    threat_id: str,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> Optional[dict]:
     """
     Retourne le détail complet d'un Threat : métadonnées + IOCs + stats.
     """
@@ -358,11 +432,17 @@ def get_threat_by_id(session: Session, threat_id: str) -> Optional[dict]:
     from app.models.exposed_asset import ExposedAsset
     from core.clustering import mechanism_counts_for_indicators
 
-    threat = session.query(Threat).filter(Threat.id == threat_id).first()
+    q = session.query(Threat).filter(Threat.id == threat_id)
+    if allowed_tlps is not None:
+        q = q.filter(Threat.tlp.in_(allowed_tlps))
+    threat = q.first()
     if not threat:
         return None
 
-    indicators = threat.indicators
+    indicators = [
+        indicator for indicator in threat.indicators
+        if allowed_tlps is None or indicator.tlp in allowed_tlps
+    ]
 
     # Stats agrégées
     confidences = [i.confidence for i in indicators if i.confidence is not None]
@@ -430,11 +510,20 @@ def get_threat_by_id(session: Session, threat_id: str) -> Optional[dict]:
         "first_seen": first_seen.isoformat() if first_seen else None,
     }
     
-def get_top_sources(session: Session, limit: int = 10) -> list[dict]:
+def get_top_sources(
+    session: Session,
+    limit: int = 10,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> list[dict]:
     """Top sources par nombre d'IOCs."""
-    rows = (
+    q = (
         session.query(Source.name, func.count(Indicator.id).label("count"))
         .join(Indicator, Indicator.source_id == Source.id)
+    )
+    if allowed_tlps is not None:
+        q = q.filter(Indicator.tlp.in_(allowed_tlps))
+    rows = (
+        q
         .group_by(Source.name)
         .order_by(func.count(Indicator.id).desc())
         .limit(limit)
@@ -443,14 +532,23 @@ def get_top_sources(session: Session, limit: int = 10) -> list[dict]:
     return [{"name": row.name, "count": int(row.count)} for row in rows]
 
 
-def get_top_tags(session: Session, limit: int = 10) -> list[dict]:
+def get_top_tags(
+    session: Session,
+    limit: int = 10,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> list[dict]:
     """Top tags malware par nombre d'IOCs associés."""
     from app.models.tag import Tag
 
-    rows = (
+    q = (
         session.query(Tag.name, func.count(Indicator.id).label("count"))
         .join(Indicator.tags)
         .filter(Tag.name.like("malware:%"))
+    )
+    if allowed_tlps is not None:
+        q = q.filter(Indicator.tlp.in_(allowed_tlps))
+    rows = (
+        q
         .group_by(Tag.name)
         .order_by(func.count(Indicator.id).desc())
         .limit(limit)
@@ -459,7 +557,10 @@ def get_top_tags(session: Session, limit: int = 10) -> list[dict]:
     return [{"name": row.name, "count": int(row.count)} for row in rows]
 
 
-def get_confidence_distribution(session: Session) -> list[dict]:
+def get_confidence_distribution(
+    session: Session,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> list[dict]:
     """
     Distribution des scores de confiance par tranches de 10.
     Retourne des buckets : 0-9, 10-19, … 90-100.
@@ -469,10 +570,15 @@ def get_confidence_distribution(session: Session) -> list[dict]:
 
     bucket = (func.floor(Indicator.confidence / 10) * 10).label("bucket")
 
-    rows = (
+    q = (
         session.query(bucket, func.count(Indicator.id).label("count"))
         .filter(Indicator.confidence.isnot(None))
         .filter(Indicator.status == "active")
+    )
+    if allowed_tlps is not None:
+        q = q.filter(Indicator.tlp.in_(allowed_tlps))
+    rows = (
+        q
         .group_by(bucket)
         .order_by(bucket)
         .all()
@@ -547,13 +653,22 @@ def create_indicator_manual(session: Session, data: dict) -> dict:
         "created": created,
     }
     
-def get_collection_runs(session: Session, limit: int = 50) -> list[dict]:
+def get_collection_runs(
+    session: Session,
+    limit: int = 50,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> list[dict]:
     """Retourne les derniers runs de collecte triés par date décroissante."""
     from app.models.collection_run import CollectionRun
 
-    rows = (
+    q = (
         session.query(CollectionRun)
         .join(CollectionRun.source)
+    )
+    if allowed_tlps is not None:
+        q = q.filter(Source.tlp.in_(allowed_tlps))
+    rows = (
+        q
         .order_by(CollectionRun.started_at.desc())
         .limit(limit)
         .all()
@@ -580,7 +695,10 @@ def get_collection_runs(session: Session, limit: int = 50) -> list[dict]:
 
 # ─── Cameroun — vue d'ensemble ────────────────────────────────────────────────
 
-def get_cameroon_overview(session: Session) -> dict:
+def get_cameroon_overview(
+    session: Session,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> dict:
     """Agrège les indicateurs clés de la surveillance Cameroun pour l'Overview
     et la page dédiée : institutions suivies, typosquatting, certificats
     suspects, surface d'attaque exposée.
@@ -598,12 +716,14 @@ def get_cameroon_overview(session: Session) -> dict:
     )
 
     def count_by_tag(tag_name: str) -> int:
-        return (
+        q = (
             session.query(Indicator)
             .join(Indicator.tags)
             .filter(Tag.name == tag_name)
-            .count()
         )
+        if allowed_tlps is not None:
+            q = q.filter(Indicator.tlp.in_(allowed_tlps))
+        return q.count()
 
     typosquat_confirmed = count_by_tag("typosquat:confirmed")
     typosquat_potential = count_by_tag("typosquat:potential")
@@ -723,7 +843,11 @@ def report_false_positive(
     """
     from app.models.enums import IndicatorStatus
 
-    indicator = session.query(Indicator).filter_by(id=indicator_id).first()
+    indicator = (
+        session.query(Indicator)
+        .filter(Indicator.id == indicator_id, Indicator.tlp != TLPLevel.RED)
+        .first()
+    )
     if not indicator:
         raise ValueError(f"Indicator {indicator_id} introuvable")
 
@@ -758,7 +882,11 @@ def report_false_positive(
     }
 
 
-def get_cameroon_timeline(session: Session, days: int = 30) -> list[dict]:
+def get_cameroon_timeline(
+    session: Session,
+    days: int = 30,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> list[dict]:
     """
     Nouvelles détections Cameroun par jour, sur les N derniers jours :
     typosquatting, certificats suspects, IPs exposées.
@@ -767,24 +895,34 @@ def get_cameroon_timeline(session: Session, days: int = 30) -> list[dict]:
     from datetime import timedelta
     since = datetime.utcnow() - timedelta(days=days)
 
-    typosquat_counts = dict(
+    typosquat_query = (
         session.query(
             func.date(Indicator.created_at),
             func.count(Indicator.id),
         )
         .join(Indicator.tags)
         .filter(Tag.name == "typosquat", Indicator.created_at >= since)
+    )
+    if allowed_tlps is not None:
+        typosquat_query = typosquat_query.filter(Indicator.tlp.in_(allowed_tlps))
+    typosquat_counts = dict(
+        typosquat_query
         .group_by(func.date(Indicator.created_at))
         .all()
     )
 
-    ct_counts = dict(
+    ct_query = (
         session.query(
             func.date(Indicator.created_at),
             func.count(Indicator.id),
         )
         .join(Indicator.tags)
         .filter(Tag.name == "ct-monitor", Indicator.created_at >= since)
+    )
+    if allowed_tlps is not None:
+        ct_query = ct_query.filter(Indicator.tlp.in_(allowed_tlps))
+    ct_counts = dict(
+        ct_query
         .group_by(func.date(Indicator.created_at))
         .all()
     )
@@ -812,7 +950,10 @@ def get_cameroon_timeline(session: Session, days: int = 30) -> list[dict]:
     ]
 
 
-def get_institutions_ranked(session: Session) -> list[dict]:
+def get_institutions_ranked(
+    session: Session,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> list[dict]:
     """
     Classe les institutions par score de risque composite :
     typosquats confirmés (poids 3) + IPs haut risque exposées (poids 3)
@@ -821,12 +962,17 @@ def get_institutions_ranked(session: Session) -> list[dict]:
     assets = session.query(MonitoredAsset).filter_by(active=True).all()
 
     # Compte les IOCs typosquat/ct par institution via le tag typosquat:{acronym}
-    tag_rows = (
+    tag_query = (
         session.query(Tag.name, func.count(Indicator.id))
         .join(Indicator.tags)
         .filter(Tag.name.like("typosquat:%") | Tag.name.like("ct:%"))
         .filter(Tag.name.notin_(["typosquat:confirmed", "typosquat:potential", "ct:confirmed", "ct:potential"]))
         .filter(Indicator.status == IndicatorStatus.active)  # exclut les faux positifs whitelistes (ex: bruit "art"/"orange")
+    )
+    if allowed_tlps is not None:
+        tag_query = tag_query.filter(Indicator.tlp.in_(allowed_tlps))
+    tag_rows = (
+        tag_query
         .group_by(Tag.name)
         .all()
     )
@@ -876,7 +1022,10 @@ def get_institutions_ranked(session: Session) -> list[dict]:
     return results
 
 
-def get_vuln_severity_breakdown(session: Session) -> dict:
+def get_vuln_severity_breakdown(
+    session: Session,
+    allowed_tlps: tuple[TLPLevel, ...] | None = None,
+) -> dict:
     """
     Croise les CVE exposées (table exposed_assets) avec les scores CVSS
     déjà collectés via le collecteur NVD, pour distinguer une CVE critique
@@ -895,11 +1044,13 @@ def get_vuln_severity_breakdown(session: Session) -> dict:
             "distinct_cves": 0, "total_occurrences": 0,
         }
 
-    cve_rows = (
+    cve_query = (
         session.query(Indicator.value, Indicator.raw_metadata)
         .filter(Indicator.type == "cve", Indicator.value.in_(list(cve_occurrences.keys())))
-        .all()
     )
+    if allowed_tlps is not None:
+        cve_query = cve_query.filter(Indicator.tlp.in_(allowed_tlps))
+    cve_rows = cve_query.all()
     cvss_scores: dict[str, float] = {}
     for value, metadata in cve_rows:
         score = (metadata or {}).get("cvss_score")
